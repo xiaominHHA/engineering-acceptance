@@ -13,6 +13,10 @@ services:
       SPRING_MONGODB_URI: mongodb://mongo:27017/${MONGO_DATABASE:?set database}
     ports:
       - "127.0.0.1:${BACKEND_HOST_PORT:?server-assigned loopback port}:8080"
+    networks:
+      internal:
+      edge:
+        aliases: [wm7023-backend]
     mem_limit: ${BACKEND_MEMORY_LIMIT:?server-confirmed memory limit}
     depends_on:
       mysql: { condition: service_healthy }
@@ -32,6 +36,7 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set root password}
     ports:
       - "127.0.0.1:${MYSQL_HOST_PORT:?server-assigned SSH tunnel port}:3306"
+    networks: [internal]
     mem_limit: ${MYSQL_MEMORY_LIMIT:?server-confirmed memory limit}
     volumes: [production_mysql_data:/var/lib/mysql]
     healthcheck:
@@ -48,6 +53,7 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:?set root password}
     ports:
       - "127.0.0.1:${MONGO_HOST_PORT:?server-assigned SSH tunnel port}:27017"
+    networks: [internal]
     mem_limit: ${MONGO_MEMORY_LIMIT:?server-confirmed memory limit}
     volumes: [production_mongo_data:/data/db]
     healthcheck:
@@ -59,3 +65,9 @@ services:
 volumes:
   production_mysql_data:
   production_mongo_data:
+networks:
+  internal:
+    name: wm7023-internal
+  edge:
+    name: wm7023-edge
+    external: true
