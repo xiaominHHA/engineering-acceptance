@@ -1,6 +1,7 @@
 # Shared campus-nginx HTTP template for wm7023.campusmeow.com.
 server {
     listen 80;
+    listen [::]:80;
     server_name wm7023.campusmeow.com;
 
     location / {
