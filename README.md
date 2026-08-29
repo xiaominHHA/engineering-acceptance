@@ -36,7 +36,13 @@
 
 ## 当前状态
 
-Stage 4 已完成最小用户/个人信息与论坛闭环：MySQL 用户 API、MongoDB 帖子 API，以及 Flutter 注册、登录、资料编辑和发帖/列表页面。Docker Compose 三环境、固定测试数据、真实数据库集成测试和根目录质量门禁持续有效。服务器连接信息、三级域名、宿主端口、Nginx 管理方式、容器资源额度、部署目录和 TLS 管理方式均待服务器负责人确认。
+Stage 5 发布准备已完成：最小用户/个人信息与论坛闭环、GitHub Actions 质量门禁、release/deploy 骨架和 Nginx 模板均已落盘。部署仍等待服务器连接信息、三级域名、宿主端口、Nginx 管理方式、容器资源额度、部署目录和 TLS 管理方式确认。
+
+MySQL 保存用户账号及个人资料；MongoDB 保存论坛帖子。local Compose 发布三个本地回环服务，test Compose 使用临时隔离数据库和固定初始化数据，production Compose 仅发布 backend、MySQL、MongoDB，并通过回环端口供 SSH Tunnel 管理。
+
+本地启动：复制 `infra/env/local.env.example` 后执行 `docker compose --env-file infra/env/local.env.example -f infra/compose/compose.local.yml up -d --build`。质量门禁依次使用 `./lint.sh`、`./test.sh`、`./build.sh` 或统一执行 `./check.sh`。
+
+Git 工作流为 `main`（发布）、`develop`（集成）和短生命周期 `feat/*`/`release/*` 分支。当前发布分支为 `release/1.0.0`，尚未创建 tag 或连接生产服务器。
 
 ## 文档
 
