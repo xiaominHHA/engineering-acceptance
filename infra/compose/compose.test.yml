@@ -1,0 +1,46 @@
+services:
+  mysql:
+    image: mysql:8.4.6
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-acceptance_test}
+      MYSQL_USER: ${MYSQL_USER:-acceptance_test}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-test_only_password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-test_only_root_password}
+    volumes:
+      - test_mysql_data:/var/lib/mysql
+      - ../../infra/test/mysql/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  mongo:
+    image: mongo:8.0.13
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-acceptance_test}
+    volumes:
+      - test_mongo_data:/data/db
+      - ../../infra/test/mongo/init.js:/docker-entrypoint-initdb.d/001-init.js:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' | grep 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  backend-test:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+      target: test
+    environment:
+      SPRING_PROFILES_ACTIVE: test
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-acceptance_test}
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-acceptance_test}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-test_only_password}
+      SPRING_DATA_MONGODB_URI: mongodb://mongo:27017/${MONGO_DATABASE:-acceptance_test}
+      SPRING_MONGODB_URI: mongodb://mongo:27017/${MONGO_DATABASE:-acceptance_test}
+    depends_on:
+      mysql: { condition: service_healthy }
+      mongo: { condition: service_healthy }
+volumes:
+  test_mysql_data:
+  test_mongo_data:

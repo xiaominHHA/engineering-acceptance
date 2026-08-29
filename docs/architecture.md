@@ -17,4 +17,4 @@
 - 后端基础依赖仅包含 Web MVC、Validation、Actuator、JPA、MySQL Driver、MongoDB 和 Initializr 默认测试支持。
 - 后端入口类为 `com.campusmeow.acceptance.EngineeringAcceptanceApplication`。
 
-Compose 环境和真实数据库连接尚未创建。当前没有 Entity、Document、Controller、Service、Repository 或其他业务实现。
+Compose local/test/production 基线已创建；test 环境通过独立 project 和固定初始化脚本验证真实 MySQL/MongoDB 连接。当前没有 Entity、Document、Controller、Service、Repository 或其他业务实现。

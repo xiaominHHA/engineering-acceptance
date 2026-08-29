@@ -35,3 +35,7 @@ cd backend
 当前后端测试是纯 JUnit 骨架 smoke test，只检查入口类具有 `@SpringBootApplication`。它不加载 Spring context、不连接数据库，也不是数据库集成测试。这样可以在 Compose 尚未创建时明确隔离骨架验证，且不会偷偷连接 local/production。
 
 真实 MySQL/MongoDB 集成测试、固定初始化数据和 `test.sh` 均尚未实现，必须在 Docker Compose 阶段补齐。
+
+## Stage 3 验证
+
+`./test.sh` 为每次运行创建唯一 Compose project，启动无宿主端口的 MySQL/MongoDB，加载 `infra/test` 固定数据，并在 `backend-test` 容器内运行 Spring Boot 集成测试；随后运行 Flutter test，退出时只清理本次 project 的资源。`./check.sh` 已完整通过。

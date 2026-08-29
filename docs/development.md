@@ -36,4 +36,4 @@ Spring Boot 骨架通过官方 `https://start.spring.io/starter.zip` 创建，�
 
 当前 WSL 中 `docker` 和 `docker compose` 命令不可用，提示需要启用 Docker Desktop WSL integration。Stage 2 不使用 Docker；进入 Compose 阶段前必须先修复该环境问题。
 
-根目录统一脚本尚未实现，当前不要尝试 README 中列出的脚本。
+根目录统一脚本已实现：`lint.sh` 执行静态检查，`test.sh` 执行隔离 Docker 集成测试，`build.sh` 输出 `dist/` 中的 APK/JAR，`check.sh` 串行执行前三者，`deploy.sh` 仅校验显式 release tag。Docker Compose 配置位于 `infra/compose/`；生产端口、资源额度和服务器信息仍待确认。

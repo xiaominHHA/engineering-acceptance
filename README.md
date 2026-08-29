@@ -32,11 +32,11 @@
 ./deploy.sh <release-tag>
 ```
 
-这些脚本目前尚未实现，不能视为可执行或已验证。当前阶段请使用各子项目的标准命令，详见开发与测试文档。
+五个脚本已实现并由 `./check.sh` 统一执行；`deploy.sh` 目前只做 release tag 和待确认服务器配置校验，不执行远程部署。
 
 ## 当前状态
 
-Stage 2 已使用 `flutter create` 和 Spring Initializr 建立并验证 Android-only Flutter、Maven Spring Boot 官方骨架。Flutter 静态检查、测试和 debug APK 构建通过；后端 Maven Wrapper 测试和 JAR 打包通过。后端当前仅保留骨架 smoke test，不连接数据库。尚未创建 Compose、harness、CI，也未实现登录、个人信息或论坛业务。服务器连接信息、三级域名、宿主端口、Nginx 管理方式、容器资源额度、部署目录和 TLS 管理方式均待服务器负责人确认。
+Stage 3 已完成 Docker Compose 三环境、固定测试数据、真实数据库集成测试和根目录质量门禁。尚未实现登录、个人信息或论坛业务，也未创建 CI 或配置 Nginx。服务器连接信息、三级域名、宿主端口、Nginx 管理方式、容器资源额度、部署目录和 TLS 管理方式均待服务器负责人确认。
 
 ## 文档
 

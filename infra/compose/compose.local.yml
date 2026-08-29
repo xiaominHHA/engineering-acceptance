@@ -1,0 +1,54 @@
+services:
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+      target: runtime
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-acceptance}
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-acceptance}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-local_change_me}
+      SPRING_DATA_MONGODB_URI: mongodb://mongo:27017/${MONGO_DATABASE:-acceptance}
+      SPRING_MONGODB_URI: mongodb://mongo:27017/${MONGO_DATABASE:-acceptance}
+    ports:
+      - "127.0.0.1:${BACKEND_HOST_PORT:-18080}:8080"
+    depends_on:
+      mysql: { condition: service_healthy }
+      mongo: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q 'UP'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+  mysql:
+    image: mysql:8.4.6
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-acceptance}
+      MYSQL_USER: ${MYSQL_USER:-acceptance}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-local_change_me}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_change_me}
+    ports:
+      - "127.0.0.1:${MYSQL_HOST_PORT:-13306}:3306"
+    volumes: [local_mysql_data:/var/lib/mysql]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  mongo:
+    image: mongo:8.0.13
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-acceptance}
+    ports:
+      - "127.0.0.1:${MONGO_HOST_PORT:-17017}:27017"
+    volumes: [local_mongo_data:/data/db]
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' | grep 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+volumes:
+  local_mysql_data:
+  local_mongo_data:
