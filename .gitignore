@@ -1,0 +1,32 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+!*.env.example
+*.pem
+*.key
+
+# Build outputs
+dist/
+backend/target/
+frontend/build/
+
+# Flutter and Dart generated state
+frontend/.dart_tool/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/.packages
+frontend/.pub-cache/
+
+# IDE and operating system files
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+
