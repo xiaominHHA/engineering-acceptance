@@ -1,0 +1,11 @@
+CREATE TABLE IF NOT EXISTS users (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  username VARCHAR(100) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  nickname VARCHAR(100) NOT NULL,
+  birthday DATE,
+  school VARCHAR(150),
+  class_name VARCHAR(100),
+  created_at TIMESTAMP(6) NOT NULL,
+  updated_at TIMESTAMP(6) NOT NULL
+);

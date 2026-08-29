@@ -9,12 +9,13 @@
 - Spring Boot、MySQL、MongoDB 在 local、test、production 中均通过 Docker 运行。
 - 不引入微服务、Redis、消息队列、独立认证服务或分布式追踪系统。
 
-## 当前骨架
+## 当前实现
 
-- `frontend/` 由 Flutter 3.47.1 的 `flutter create` 创建，仅包含 Android 平台和官方计数器示例。
+- `frontend/` 由 Flutter 3.47.1 的 `flutter create` 创建，仅包含 Android 平台；页面通过集中配置的 HTTP API 完成注册、登录、资料编辑和论坛列表/发帖。
 - Flutter project name 为 `engineering_acceptance_app`，Android applicationId 为 `com.campusmeow.acceptance.app`。
 - `backend/` 由官方 Spring Initializr 创建，使用 Spring Boot 4.1.1、Java 21 和 Maven Wrapper。
-- 后端基础依赖仅包含 Web MVC、Validation、Actuator、JPA、MySQL Driver、MongoDB 和 Initializr 默认测试支持。
+- 后端依赖包含 Web MVC、Validation、Actuator、JPA、MySQL Driver、MongoDB、BCrypt crypto 和 Initializr 默认测试支持。
 - 后端入口类为 `com.campusmeow.acceptance.EngineeringAcceptanceApplication`。
+- `user/` 模块负责 MySQL 用户与个人资料，`forum/` 模块负责 MongoDB 帖子；Controller 通过 Service 访问各自 Repository，响应 DTO 不暴露密码哈希。
 
-Compose local/test/production 基线已创建；test 环境通过独立 project 和固定初始化脚本验证真实 MySQL/MongoDB 连接。当前没有 Entity、Document、Controller、Service、Repository 或其他业务实现。
+Compose local/test/production 基线已创建；test 环境通过独立 project 和固定初始化脚本验证真实 MySQL/MongoDB 连接，业务集成测试覆盖用户密码哈希、资料读写和帖子读写。

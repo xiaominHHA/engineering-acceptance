@@ -39,3 +39,7 @@ cd backend
 ## Stage 3 验证
 
 `./test.sh` 为每次运行创建唯一 Compose project，启动无宿主端口的 MySQL/MongoDB，加载 `infra/test` 固定数据，并在 `backend-test` 容器内运行 Spring Boot 集成测试；随后运行 Flutter test，退出时只清理本次 project 的资源。`./check.sh` 已完整通过。
+
+## Stage 4 验证
+
+真实数据库测试继续在上述隔离 Compose project 中运行：MySQL 测试注册用户、确认密码使用 BCrypt 哈希并读写个人资料；MongoDB 测试创建并读取帖子。local Compose API smoke test 已验证 Actuator health、注册、登录、用户资料读取/更新、发帖和帖子列表。Flutter `analyze`、`test` 及正式 APK 构建均通过。
