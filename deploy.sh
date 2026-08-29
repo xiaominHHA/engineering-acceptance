@@ -62,6 +62,12 @@ docker compose --env-file "$env_file" -p engineering-acceptance-production \
 docker compose --env-file "$env_file" -p engineering-acceptance-production \
   -f infra/compose/compose.production.yml up -d
 backend_port=$(awk -F= '$1 == "BACKEND_HOST_PORT" {print $2}' "$env_file")
+for attempt in $(seq 1 60); do
+  if curl --fail --silent "http://127.0.0.1:${backend_port}/actuator/health" >/dev/null; then
+    break
+  fi
+  [[ "$attempt" -lt 60 ]] && sleep 2
+done
 curl --fail --silent "http://127.0.0.1:${backend_port}/actuator/health" >/dev/null
 
 if ! docker network inspect wm7023-edge --format '{{json .Containers}}' | grep -q '"Name":"'"$nginx_container"'"'; then
