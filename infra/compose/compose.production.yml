@@ -1,5 +1,6 @@
 services:
   backend:
+    image: engineering-acceptance-backend:${RELEASE_IMAGE_TAG:?set explicit release image tag}
     build:
       context: ../../backend
       dockerfile: Dockerfile

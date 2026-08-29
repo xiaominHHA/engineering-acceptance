@@ -23,6 +23,7 @@ docker compose -f infra/compose/compose.local.yml config >/dev/null
 docker compose -f infra/compose/compose.test.yml config >/dev/null
 env BACKEND_HOST_PORT=18081 MYSQL_HOST_PORT=13307 MONGO_HOST_PORT=17018 \
   BACKEND_MEMORY_LIMIT=512m MYSQL_MEMORY_LIMIT=512m MONGO_MEMORY_LIMIT=512m \
+  RELEASE_IMAGE_TAG=v0.0.0 \
   MYSQL_DATABASE=acceptance MYSQL_USER=acceptance MYSQL_PASSWORD=lint_password \
   MYSQL_ROOT_PASSWORD=lint_root_password MONGO_DATABASE=acceptance \
   MONGO_INITDB_ROOT_USERNAME=lint_admin MONGO_INITDB_ROOT_PASSWORD=lint_mongo_password \

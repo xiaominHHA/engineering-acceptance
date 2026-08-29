@@ -32,17 +32,17 @@
 ./deploy.sh <release-tag>
 ```
 
-五个脚本已实现并由 `./check.sh` 统一执行；`deploy.sh` 目前只做 release tag 和待确认服务器配置校验，不执行远程部署。
+五个脚本已实现并由 `./check.sh` 统一执行；`deploy.sh` 只接受明确 release tag，并以该 tag 构建显式版本的生产镜像。
 
 ## 当前状态
 
-Stage 5 发布准备已完成：最小用户/个人信息与论坛闭环、GitHub Actions 质量门禁、release/deploy 骨架和共享 Nginx 模板均已落盘。服务器地址、域名、端口、部署目录和共享 Nginx 拓扑已确认；HTTPS/TLS 仍按负责人方案处理。
+发布工程已完成：最小用户/个人信息与论坛闭环、GitHub Actions 质量门禁、release 部署和共享 Nginx 接入均已落盘。服务器地址、域名、端口、部署目录和共享 Nginx 拓扑已确认；HTTPS/TLS 仍按负责人方案处理。
 
 MySQL 保存用户账号及个人资料；MongoDB 保存论坛帖子。local Compose 发布三个本地回环服务，test Compose 使用临时隔离数据库和固定初始化数据，production Compose 仅发布 backend、MySQL、MongoDB，并通过回环端口供 SSH Tunnel 管理。
 
 本地启动：复制 `infra/env/local.env.example` 后执行 `docker compose --env-file infra/env/local.env.example -f infra/compose/compose.local.yml up -d --build`。质量门禁依次使用 `./lint.sh`、`./test.sh`、`./build.sh` 或统一执行 `./check.sh`。
 
-Git 工作流为 `main`（发布）、`develop`（集成）和短生命周期 `feat/*`/`release/*` 分支。当前发布分支为 `release/1.0.0`，尚未创建 tag 或连接生产服务器。
+Git 工作流为 `main`（发布）、`develop`（集成）和短生命周期 `feat/*`/`release/*` 分支。生产发布使用不可变的 annotated tag，服务器通过只读 Deploy Key checkout 指定 tag。
 
 ## 文档
 
