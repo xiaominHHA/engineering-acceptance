@@ -17,6 +17,8 @@ DEPLOY_SSH_TARGET=${DEPLOY_SSH_TARGET:-ubuntu@106.53.116.230}
 DEPLOY_DIR=${DEPLOY_DIR:-/home/ubuntu/engineering-acceptance-wm7023}
 NGINX_CONTAINER=${NGINX_CONTAINER:-campus-nginx}
 NGINX_CONF_PATH=${NGINX_CONF_PATH:-/home/ubuntu/dsl_campus/docker/nginx/nginx.conf}
+DEPLOY_GIT_SSH_KEY=${DEPLOY_GIT_SSH_KEY:-/home/ubuntu/.ssh/engineering_acceptance_deploy}
+REPOSITORY_URL=$(git -C "$ROOT_DIR" remote get-url origin)
 required=(PRODUCTION_ENV_FILE)
 missing=()
 for variable in "${required[@]}"; do
@@ -26,17 +28,30 @@ if ((${#missing[@]})); then
   printf 'Deployment refused; server configuration is not confirmed. Missing: %s\n' "${missing[*]}" >&2
   exit 2
 fi
-[[ -f "$PRODUCTION_ENV_FILE" ]] || { echo "production env file not found: $PRODUCTION_ENV_FILE" >&2; exit 2; }
-
 ssh "$DEPLOY_SSH_TARGET" bash -s -- "$tag" "$DEPLOY_DIR" "$PRODUCTION_ENV_FILE" \
-  "$NGINX_CONTAINER" "$NGINX_CONF_PATH" <<'REMOTE'
+  "$NGINX_CONTAINER" "$NGINX_CONF_PATH" "$REPOSITORY_URL" "$DEPLOY_GIT_SSH_KEY" <<'REMOTE'
 set -Eeuo pipefail
 tag=$1
 deploy_dir=$2
 env_file=$3
 nginx_container=$4
 nginx_conf=$5
+repository_url=$6
+git_ssh_key=$7
+[[ -f "$git_ssh_key" ]] || { echo "server deploy key not found: $git_ssh_key" >&2; exit 2; }
+export GIT_SSH_COMMAND="ssh -i $git_ssh_key -o IdentitiesOnly=yes"
+if [[ ! -d "$deploy_dir/.git" ]]; then
+  if [[ -e "$deploy_dir" ]] && [[ -n "$(find "$deploy_dir" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+    echo "deployment directory exists but is not an empty Git checkout: $deploy_dir" >&2
+    exit 2
+  fi
+  mkdir -p "$(dirname "$deploy_dir")"
+  git clone "$repository_url" "$deploy_dir"
+fi
 cd "$deploy_dir"
+[[ -f "$env_file" ]] || { echo "remote production env file not found: $env_file" >&2; exit 2; }
+env_mode=$(stat -c '%a' "$env_file")
+[[ "$env_mode" == 600 ]] || { echo "remote production env file must have mode 600" >&2; exit 2; }
 git fetch --tags origin
 git checkout --detach "$tag"
 docker network inspect wm7023-edge >/dev/null 2>&1 || docker network create wm7023-edge >/dev/null
