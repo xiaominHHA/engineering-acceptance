@@ -54,7 +54,7 @@ env_mode=$(stat -c '%a' "$env_file")
 [[ "$env_mode" == 600 ]] || { echo "remote production env file must have mode 600" >&2; exit 2; }
 git fetch --tags origin
 git checkout --detach "$tag"
-./mvnw -q -DskipTests package
+./backend/mvnw -f backend/pom.xml -q -DskipTests package
 docker network inspect wm7023-edge >/dev/null 2>&1 || docker network create wm7023-edge >/dev/null
 docker compose --env-file "$env_file" -p engineering-acceptance-production \
   -f infra/compose/compose.production.yml build
