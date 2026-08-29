@@ -36,7 +36,7 @@
 
 ## 当前状态
 
-Stage 5 发布准备已完成：最小用户/个人信息与论坛闭环、GitHub Actions 质量门禁、release/deploy 骨架和 Nginx 模板均已落盘。部署仍等待服务器连接信息、三级域名、宿主端口、Nginx 管理方式、容器资源额度、部署目录和 TLS 管理方式确认。
+Stage 5 发布准备已完成：最小用户/个人信息与论坛闭环、GitHub Actions 质量门禁、release/deploy 骨架和共享 Nginx 模板均已落盘。服务器地址、域名、端口、部署目录和共享 Nginx 拓扑已确认；HTTPS/TLS 仍按负责人方案处理。
 
 MySQL 保存用户账号及个人资料；MongoDB 保存论坛帖子。local Compose 发布三个本地回环服务，test Compose 使用临时隔离数据库和固定初始化数据，production Compose 仅发布 backend、MySQL、MongoDB，并通过回环端口供 SSH Tunnel 管理。
 

@@ -17,7 +17,7 @@ DEPLOY_SSH_TARGET=${DEPLOY_SSH_TARGET:-ubuntu@106.53.116.230}
 DEPLOY_DIR=${DEPLOY_DIR:-/home/ubuntu/engineering-acceptance-wm7023}
 NGINX_CONTAINER=${NGINX_CONTAINER:-campus-nginx}
 NGINX_CONF_PATH=${NGINX_CONF_PATH:-/home/ubuntu/dsl_campus/docker/nginx/nginx.conf}
-required=(PRODUCTION_ENV_FILE TLS_CERT_PATH TLS_KEY_PATH)
+required=(PRODUCTION_ENV_FILE)
 missing=()
 for variable in "${required[@]}"; do
   [[ -n "${!variable:-}" ]] || missing+=("$variable")
@@ -29,15 +29,13 @@ fi
 [[ -f "$PRODUCTION_ENV_FILE" ]] || { echo "production env file not found: $PRODUCTION_ENV_FILE" >&2; exit 2; }
 
 ssh "$DEPLOY_SSH_TARGET" bash -s -- "$tag" "$DEPLOY_DIR" "$PRODUCTION_ENV_FILE" \
-  "$NGINX_CONTAINER" "$NGINX_CONF_PATH" "$TLS_CERT_PATH" "$TLS_KEY_PATH" <<'REMOTE'
+  "$NGINX_CONTAINER" "$NGINX_CONF_PATH" <<'REMOTE'
 set -Eeuo pipefail
 tag=$1
 deploy_dir=$2
 env_file=$3
 nginx_container=$4
 nginx_conf=$5
-tls_cert_path=$6
-tls_key_path=$7
 cd "$deploy_dir"
 git fetch --tags origin
 git checkout --detach "$tag"
@@ -57,14 +55,19 @@ rendered=$(mktemp)
 updated=$(mktemp)
 backup="${nginx_conf}.bak.${tag//[^A-Za-z0-9_.-]/_}.$(date +%Y%m%d%H%M%S)"
 trap 'rm -f "$rendered" "$updated"' EXIT
-sed -e "s|\${TLS_CERT_PATH}|$tls_cert_path|g" \
-    -e "s|\${TLS_KEY_PATH}|$tls_key_path|g" \
-    infra/nginx/backend.conf.template >"$rendered"
+{
+  echo '# BEGIN engineering-acceptance wm7023 block'
+  sed -n '1,$p' infra/nginx/backend.conf.template
+  echo '# END engineering-acceptance wm7023 block'
+} >"$rendered"
 cp -p "$nginx_conf" "$backup"
 awk -v payload="$rendered" '
-  BEGIN { in_http = 0; depth = 0; inserted = 0 }
+  BEGIN { in_http = 0; depth = 0; inserted = 0; skipping = 0 }
   /^[[:space:]]*http[[:space:]]*\{/ { in_http = 1 }
+  /^[[:space:]]*# BEGIN engineering-acceptance wm7023 block[[:space:]]*$/ { skipping = 1; next }
+  skipping && /^[[:space:]]*# END engineering-acceptance wm7023 block[[:space:]]*$/ { skipping = 0; next }
   {
+    if (skipping) next
     opens = gsub(/\{/, "&")
     closes = gsub(/\}/, "&")
     if (in_http && !inserted && depth == 1 && closes > 0) {

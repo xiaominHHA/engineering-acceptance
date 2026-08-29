@@ -1,20 +1,7 @@
-# Shared campus-nginx template for wm7023.campusmeow.com.
-# The TLS paths remain server-managed values and must be supplied at deployment.
+# Shared campus-nginx HTTP template for wm7023.campusmeow.com.
 server {
     listen 80;
     server_name wm7023.campusmeow.com;
-
-    location / {
-        return 301 https://$host$request_uri;
-    }
-}
-
-server {
-    listen 443 ssl http2;
-    server_name wm7023.campusmeow.com;
-
-    ssl_certificate ${TLS_CERT_PATH};
-    ssl_certificate_key ${TLS_KEY_PATH};
 
     location / {
         proxy_pass http://wm7023-backend:8080;
