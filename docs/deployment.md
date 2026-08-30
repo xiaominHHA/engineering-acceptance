@@ -8,6 +8,7 @@
 - 所有生产容器设置资源限制，数据库必须设置最大内存。
 - 部署使用显式存在的 Git release tag；服务器 checkout 指定 tag 后执行 Compose build/up 和健康检查。
 - 项目不引入 Docker Registry；production backend 镜像以 release tag 显式命名，不依赖 `latest`。镜像通过多阶段 Dockerfile 从服务器 checkout 的 tag 源码构建，runtime image 不复用服务器旧 JAR。
+- MySQL schema 只由 backend 内随 release 发布的 Flyway migration 管理；生产使用 `baseline-on-migrate=false`，Hibernate 使用 `ddl-auto=validate`。部署前必须备份本项目 MySQL，既不删除 production volume，也不使用 Docker init SQL 创建应用表。
 - Nginx 方案保留为模板，但不假定项目独占 Nginx 或服务器的 80/443。
 - `infra/nginx/backend.conf.template` 当前提供已确认域名的 HTTP 反代模板；HTTPS/TLS 后续按服务器负责人方案处理。
 - `deploy.sh <release-tag>` 在本地工作树干净且服务器变量齐全时，令远端 checkout 指定 tag，执行 production Compose build/up 并检查 Actuator；缺少信息时安全拒绝执行。

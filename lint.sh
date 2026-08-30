@@ -21,6 +21,9 @@ if ((${#root_scripts[@]})); then run_shellcheck "${root_scripts[@]}"; fi
 if ((${#helper_scripts[@]})); then run_shellcheck "${helper_scripts[@]}"; fi
 docker compose -f infra/compose/compose.local.yml config >/dev/null
 docker compose -f infra/compose/compose.test.yml config >/dev/null
+env SMOKE_IMAGE_TAG=lint-smoke SMOKE_BACKEND_HOST_PORT=18082 \
+  docker compose --env-file infra/env/test.env.example \
+  -f infra/compose/compose.production-smoke.yml config >/dev/null
 env BACKEND_HOST_PORT=18081 MYSQL_HOST_PORT=13307 MONGO_HOST_PORT=17018 \
   BACKEND_MEMORY_LIMIT=512m MYSQL_MEMORY_LIMIT=512m MONGO_MEMORY_LIMIT=512m \
   RELEASE_IMAGE_TAG=v0.0.0 \

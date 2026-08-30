@@ -1,45 +1,19 @@
 # 测试
 
-## 已确认原则
+## 原则
 
 - `test.sh` 每次使用唯一 Compose project 和新 volumes。
-- MySQL、MongoDB 使用版本化的固定初始化数据。
-- 后端必须包含连接真实 MySQL/MongoDB 的集成测试；mock 不能替代该测试。
-- 测试数据库不发布宿主端口，也不得连接 local 或 production。
-- 结束时只清理本次测试创建的容器、网络和 volumes。
+- MySQL schema 只由与 local/production 相同的 Flyway migration 创建。
+- MySQL fixture 在 migration 完成后由测试框架插入；MongoDB 使用固定 init fixture。
+- 后端测试连接真实 MySQL/MongoDB，mock 不能替代数据库集成测试。
+- 测试数据库不发布宿主端口，也不连接 local 或 production。
+- 退出时只清理本次 project 的容器、network、volumes 和临时 image。
 - Flutter 使用标准 `flutter test`。
 
-## Stage 2 已验证范围
+## 当前质量门禁
 
-Flutter 官方 Widget smoke test 已通过：
+`./test.sh` 首先创建全新 MySQL/MongoDB。backend 启动后执行严格的 Flyway V1，测试断言 `flyway_schema_history` 中 V1 成功、`users` 表存在且 Hibernate schema validation 通过。随后插入固定 MySQL fixture，并验证真实数据库连接和完整用户/论坛 API 流程。
 
-```bash
-cd frontend
-flutter pub get
-dart format --output=none --set-exit-if-changed .
-flutter analyze
-flutter test
-```
+脚本还启动独立的 production-like Compose：使用正式多阶段 Dockerfile、production profile、临时回环端口、临时 secrets 和临时 volumes。它验证注册、BCrypt 与响应脱敏、登录、资料 GET/PUT、MongoDB 发帖/列表；只重启该临时 backend 后，再确认 V1 未重复执行且 MySQL/MongoDB 数据均未丢失。
 
-后端使用 Maven Wrapper 完成编译、测试和打包：
-
-```bash
-cd backend
-./mvnw --version
-./mvnw test
-./mvnw package
-```
-
-以上后端命令均已通过；Flutter 的 `flutter build apk --debug` 也已通过并生成 debug APK。`./check.sh` 当前尚不存在，因此按照开发规范本阶段不适用且未执行；该脚本创建后，后续阶段必须使用它作为完整质量门禁。
-
-当前后端测试是纯 JUnit 骨架 smoke test，只检查入口类具有 `@SpringBootApplication`。它不加载 Spring context、不连接数据库，也不是数据库集成测试。这样可以在 Compose 尚未创建时明确隔离骨架验证，且不会偷偷连接 local/production。
-
-真实 MySQL/MongoDB 集成测试、固定初始化数据和 `test.sh` 均尚未实现，必须在 Docker Compose 阶段补齐。
-
-## Stage 3 验证
-
-`./test.sh` 为每次运行创建唯一 Compose project，启动无宿主端口的 MySQL/MongoDB，加载 `infra/test` 固定数据，并在 `backend-test` 容器内运行 Spring Boot 集成测试；随后运行 Flutter test，退出时只清理本次 project 的资源。`./check.sh` 已完整通过。
-
-## Stage 4 验证
-
-真实数据库测试继续在上述隔离 Compose project 中运行：MySQL 测试注册用户、确认密码使用 BCrypt 哈希并读写个人资料；MongoDB 测试创建并读取帖子。local Compose API smoke test 已验证 Actuator health、注册、登录、用户资料读取/更新、发帖和帖子列表。Flutter `analyze`、`test` 及正式 APK 构建均通过。
+所有临时资源按唯一 project 精确清理，不执行 Docker prune。`./check.sh` 依次运行 lint、上述测试和正式 APK/JAR 构建。

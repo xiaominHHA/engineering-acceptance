@@ -15,7 +15,7 @@
 
 - `frontend/`：Flutter 轻客户端
 - `backend/`：Spring Boot 单体后端
-- `infra/`：Compose、环境示例、测试数据和 Nginx 模板
+- `infra/`：Compose、环境示例、MongoDB 测试数据和 Nginx 模板
 - `scripts/`：根目录脚本的辅助实现
 - `docs/`：架构、开发、测试和部署说明
 - `dist/`：本地正式构建产物，不进入 Git
@@ -38,7 +38,7 @@
 
 发布工程已完成：最小用户/个人信息与论坛闭环、GitHub Actions 质量门禁、release 部署和共享 Nginx 接入均已落盘。服务器地址、域名、端口、部署目录和共享 Nginx 拓扑已确认；HTTPS/TLS 仍按负责人方案处理。
 
-MySQL 保存用户账号及个人资料；MongoDB 保存论坛帖子。local Compose 发布三个本地回环服务，test Compose 使用临时隔离数据库和固定初始化数据，production Compose 仅发布 backend、MySQL、MongoDB，并通过回环端口供 SSH Tunnel 管理。
+MySQL 保存用户账号及个人资料；MongoDB 保存论坛帖子。MySQL schema 在所有环境中只由 Flyway 版本化 migration 管理，Hibernate 只负责校验。local Compose 发布三个本地回环服务，test Compose 使用临时隔离数据库，production Compose 仅发布 backend、MySQL、MongoDB，并通过回环端口供 SSH Tunnel 管理。
 
 本地启动：复制 `infra/env/local.env.example` 后执行 `docker compose --env-file infra/env/local.env.example -f infra/compose/compose.local.yml up -d --build`。质量门禁依次使用 `./lint.sh`、`./test.sh`、`./build.sh` 或统一执行 `./check.sh`。
 

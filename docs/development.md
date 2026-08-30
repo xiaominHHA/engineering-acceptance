@@ -34,6 +34,6 @@ Spring Boot 骨架通过官方 `https://start.spring.io/starter.zip` 创建，�
 
 后端入口类为 `EngineeringAcceptanceApplication`。当前验证使用项目自带 Maven Wrapper：`./mvnw --version`、`./mvnw test` 和 `./mvnw package` 均通过，JAR 输出到 `backend/target/engineering-acceptance-backend-0.0.1-SNAPSHOT.jar`。
 
-当前 WSL 中 `docker` 和 `docker compose` 命令不可用，提示需要启用 Docker Desktop WSL integration。Stage 2 不使用 Docker；进入 Compose 阶段前必须先修复该环境问题。
+根目录统一脚本已实现：`lint.sh` 执行静态检查，`test.sh` 执行隔离 Docker 集成测试，`build.sh` 输出 `dist/` 中的 APK/JAR，`check.sh` 串行执行前三者，`deploy.sh` 只部署显式 release tag。Docker Compose 配置位于 `infra/compose/`。
 
-根目录统一脚本已实现：`lint.sh` 执行静态检查，`test.sh` 执行隔离 Docker 集成测试，`build.sh` 输出 `dist/` 中的 APK/JAR，`check.sh` 串行执行前三者，`deploy.sh` 仅校验显式 release tag。Docker Compose 配置位于 `infra/compose/`；生产端口、资源额度和服务器信息仍待确认。
+本地首次启动会由 backend 自动执行 Flyway migration，再由 Hibernate 校验 schema。仓库当前没有已有 local volume，因此无需 baseline 或删除本地数据；若未来旧 local 数据卷出现 schema drift，应先审计并显式处理，不得永久启用 `baseline-on-migrate`。
