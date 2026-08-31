@@ -40,7 +40,7 @@
 
 MySQL 保存用户账号及个人资料；MongoDB 保存论坛帖子。MySQL schema 在所有环境中只由 Flyway 版本化 migration 管理，Hibernate 只负责校验。local Compose 发布三个本地回环服务，test Compose 使用临时隔离数据库，production Compose 仅发布 backend、MySQL、MongoDB，并通过回环端口供 SSH Tunnel 管理。
 
-本地启动：复制 `infra/env/local.env.example` 后执行 `docker compose --env-file infra/env/local.env.example -f infra/compose/compose.local.yml up -d --build`。质量门禁依次使用 `./lint.sh`、`./test.sh`、`./build.sh` 或统一执行 `./check.sh`。
+本地启动：复制 `infra/env/local.env.example` 后执行 `docker compose --env-file infra/env/local.env.example -f infra/compose/compose.local.yml up -d --build`。质量门禁依次使用 `./lint.sh`、`./test.sh`、`./build.sh` 或统一执行 `./check.sh`。`./build.sh` 生成的 release APK 默认连接 `http://wm7023.campusmeow.com`，可通过 `API_BASE_URL` 环境变量覆盖。
 
 Git 工作流为 `main`（发布）、`develop`（集成）和短生命周期 `feat/*`/`release/*` 分支。生产发布使用不可变的 annotated tag，服务器通过只读 Deploy Key checkout 指定 tag。
 

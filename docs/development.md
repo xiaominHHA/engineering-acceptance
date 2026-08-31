@@ -30,6 +30,8 @@ flutter build apk --debug                # 通过
 
 APK 由 Flutter 输出到 `frontend/build/app/outputs/flutter-apk/app-debug.apk`。
 
+未传 `--dart-define` 时，Flutter 开发配置默认使用 Android Emulator 的 `http://10.0.2.2:18080`。根目录 `./build.sh` 会为 release APK 明确注入 `http://wm7023.campusmeow.com`；需要构建其他目标时可执行 `API_BASE_URL=http://example.test ./build.sh` 覆盖。release Android network security config 仅允许生产域名使用明文 HTTP，debug 资源单独保留本地开发所需的明文访问。
+
 Spring Boot 骨架通过官方 `https://start.spring.io/starter.zip` 创建，参数为 Maven、Java 21、Jar、group/package `com.campusmeow.acceptance`、artifact/name `engineering-acceptance-backend`，以及 Web、Validation、Actuator、JPA、MySQL、MongoDB 依赖。
 
 后端入口类为 `EngineeringAcceptanceApplication`。当前验证使用项目自带 Maven Wrapper：`./mvnw --version`、`./mvnw test` 和 `./mvnw package` 均通过，JAR 输出到 `backend/target/engineering-acceptance-backend-0.0.1-SNAPSHOT.jar`。
