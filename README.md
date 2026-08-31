@@ -5,7 +5,7 @@
 ## 技术栈
 
 - Flutter 3.47.1 / Dart 3.13.1
-- Spring Boot 4.1.1 / Java 21.0.12 / Maven Wrapper 3.9.16
+- Spring Boot 4.1.1 / Java 21 / Maven 3.9.16（通过 Maven Wrapper 3.3.4）
 - MySQL
 - MongoDB
 - Docker Compose
@@ -32,15 +32,15 @@
 ./deploy.sh <release-tag>
 ```
 
-五个脚本已实现并由 `./check.sh` 统一执行；`deploy.sh` 只接受明确 release tag，并以该 tag 构建显式版本的生产镜像。
+五个脚本均已实现；`./check.sh` 依次执行 `lint.sh`、`test.sh` 和 `build.sh`，`deploy.sh` 仅在明确指定 release tag 时单独执行。
 
 ## 当前状态
 
 发布工程已完成：最小用户/个人信息与论坛闭环、GitHub Actions 质量门禁、release 部署和共享 Nginx 接入均已落盘。服务器地址、域名、端口、部署目录和共享 Nginx 拓扑已确认；HTTPS/TLS 仍按负责人方案处理。
 
-MySQL 保存用户账号及个人资料；MongoDB 保存论坛帖子。MySQL schema 在所有环境中只由 Flyway 版本化 migration 管理，Hibernate 只负责校验。local Compose 发布三个本地回环服务，test Compose 使用临时隔离数据库，production Compose 仅发布 backend、MySQL、MongoDB，并通过回环端口供 SSH Tunnel 管理。
+MySQL 保存用户账号及个人资料；MongoDB 保存论坛帖子。MySQL schema 在所有环境中只由 Flyway 版本化 migration 管理，Hibernate 只负责校验。local Compose 发布三个本地回环服务，test Compose 使用临时隔离数据库。production Compose 包含 backend、MySQL、MongoDB，三者宿主端口均只绑定 `127.0.0.1`；MySQL/MongoDB 的 loopback 端口用于 SSH Tunnel 管理，公网业务流量通过共享 `campus-nginx` 进入 backend，本项目不额外暴露 backend 或数据库公网端口。
 
-本地启动：复制 `infra/env/local.env.example` 后执行 `docker compose --env-file infra/env/local.env.example -f infra/compose/compose.local.yml up -d --build`。质量门禁依次使用 `./lint.sh`、`./test.sh`、`./build.sh` 或统一执行 `./check.sh`。`./build.sh` 生成的 release APK 默认连接 `http://wm7023.campusmeow.com`，可通过 `API_BASE_URL` 环境变量覆盖。
+本地 demo 可直接使用仓库中的 `infra/env/local.env.example`：执行 `docker compose --env-file infra/env/local.env.example -f infra/compose/compose.local.yml up -d --build`。质量门禁依次使用 `./lint.sh`、`./test.sh`、`./build.sh` 或统一执行 `./check.sh`。`./build.sh` 生成的 release APK 默认连接 `http://wm7023.campusmeow.com`，可通过 `API_BASE_URL` 环境变量覆盖。
 
 Git 工作流为 `main`（发布）、`develop`（集成）和短生命周期 `feat/*`/`release/*` 分支。生产发布使用不可变的 annotated tag，服务器通过只读 Deploy Key checkout 指定 tag。
 

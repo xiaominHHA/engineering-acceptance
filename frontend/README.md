@@ -1,17 +1,13 @@
-# engineering_acceptance_app
+# Flutter Frontend
 
-A new Flutter project.
+本目录是 `engineering-acceptance` 的 Flutter Android 客户端，保持标准 `flutter create` 项目结构。
 
-## Getting Started
+- `lib/config/`：运行配置
+- `lib/models/`：客户端模型
+- `lib/services/`：HTTP API
+- `lib/pages/`：页面
 
-This project is a starting point for a Flutter application.
+正式测试、构建和项目级说明统一参见：
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- [项目总览](../README.md)
+- [本地开发与构建](../docs/development.md)
