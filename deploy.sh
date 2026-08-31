@@ -98,14 +98,19 @@ assert_container_runtime() {
 }
 
 restore_nginx() {
-  cat "$backup" >"$nginx_conf"
-  docker exec -i "$nginx_container" sh -c 'cat > /etc/nginx/nginx.conf' <"$container_backup"
+  local host_sha container_sha
+  if ! cat "$backup" >"$nginx_conf"; then
+    echo 'failed to restore the host Nginx config in place' >&2
+    return 1
+  fi
   if [[ "$(stat -c '%i:%u:%g:%a' "$nginx_conf")" != "$original_attributes" ]]; then
     echo 'Nginx rollback restored content but file attributes changed unexpectedly' >&2
     return 1
   fi
-  if [[ "$(docker exec "$nginx_container" stat -c '%i:%u:%g:%a' /etc/nginx/nginx.conf)" != "$container_original_attributes" ]]; then
-    echo 'Nginx container rollback restored content but file attributes changed unexpectedly' >&2
+  host_sha=$(sha256sum "$nginx_conf" | awk '{print $1}')
+  container_sha=$(docker exec "$nginx_container" cat /etc/nginx/nginx.conf | sha256sum | awk '{print $1}')
+  if [[ "$host_sha" != "$container_sha" ]]; then
+    echo 'Nginx rollback host/container SHA-256 mismatch; shared bind-mount state requires manual inspection' >&2
     return 1
   fi
   docker exec "$nginx_container" nginx -t >/dev/null
@@ -123,10 +128,6 @@ validate_nginx_update() {
   [[ "$host_sha" == "$container_sha" ]] || { echo 'host/container Nginx config SHA-256 mismatch' >&2; return 1; }
   [[ "$(stat -c '%i:%u:%g:%a' "$nginx_conf")" == "$original_attributes" ]] || {
     echo 'Nginx config inode/owner/group/mode changed' >&2
-    return 1
-  }
-  [[ "$(docker exec "$nginx_container" stat -c '%i:%u:%g:%a' /etc/nginx/nginx.conf)" == "$container_original_attributes" ]] || {
-    echo 'container Nginx config inode/owner/group/mode changed' >&2
     return 1
   }
   docker exec "$nginx_container" nginx -t || return 1
@@ -214,25 +215,14 @@ fi
 assert_edge_members
 
 updated=$(mktemp)
-container_backup=$(mktemp)
 backup="${nginx_conf}.bak.${tag//[^A-Za-z0-9_.-]/_}.$(date +%Y%m%d%H%M%S)"
-trap 'rm -f "$updated" "$container_backup"' EXIT
-scripts/render-nginx-config.sh "$nginx_conf" infra/nginx/backend.conf.template "$updated"
-original_attributes=$(stat -c '%i:%u:%g:%a' "$nginx_conf")
-container_original_attributes=$(docker exec "$nginx_container" stat -c '%i:%u:%g:%a' /etc/nginx/nginx.conf)
+trap 'rm -f "$updated"' EXIT
 cp --preserve=all -- "$nginx_conf" "$backup"
-docker exec "$nginx_container" cat /etc/nginx/nginx.conf >"$container_backup"
+original_attributes=$(stat -c '%i:%u:%g:%a' "$nginx_conf")
+scripts/render-nginx-config.sh "$nginx_conf" infra/nginx/backend.conf.template "$updated"
 if ! cat "$updated" >"$nginx_conf"; then
   restore_nginx
-  echo 'failed to update the host Nginx config; restored both original configs' >&2
-  exit 1
-fi
-# Earlier releases replaced the bind-mount source inode. Update the still-mounted
-# container inode in place as well; a future container recreation will read the
-# identical host file.
-if ! docker exec -i "$nginx_container" sh -c 'cat > /etc/nginx/nginx.conf' <"$updated"; then
-  restore_nginx
-  echo 'failed to update the mounted Nginx config; restored both original configs' >&2
+  echo 'failed to update the host Nginx config; restored the original config in place' >&2
   exit 1
 fi
 if ! validate_nginx_update; then
