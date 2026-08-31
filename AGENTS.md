@@ -24,7 +24,7 @@
 - Container：Docker / Docker Compose
 - Environment：WSL Ubuntu
 - Scripts：Bash (`.sh`)
-- Reverse proxy：Nginx（生产拓扑由服务器负责人最终确认）
+- Reverse proxy：共享 `campus-nginx`（仅通过本项目 marker block 接入）
 - CI：GitHub Actions（调用仓库统一脚本，不复制另一套规则）
 
 暂不引入：
@@ -142,7 +142,7 @@ MongoDB 只负责论坛文档数据，例如帖子 ID、作者用户 ID、标题
 
 ### `test.sh`
 
-只负责自动化测试。每次必须创建独立、唯一的 test Compose project 和新 volumes；启动 MySQL、MongoDB；分别从 `infra/test/mysql/init.sql`、`infra/test/mongo/init.js` 初始化固定数据；等待健康后运行 Spring Boot 单元测试、真实数据库集成测试和 Flutter test；最终只清理本次 project、network、containers、volumes。禁止连接 local/production，禁止宽泛 Docker 清理。mock 不能替代真实数据库集成测试。
+只负责自动化测试。每次必须创建独立、唯一的 test Compose project 和新 volumes，并启动真实 MySQL、MongoDB。MySQL schema 由 `backend/src/main/resources/db/migration/V1__create_users_table.sql` 等 Flyway migration 创建；migration 完成后，Spring 测试框架通过 `backend/src/test/resources/mysql-fixture.sql` 插入固定 MySQL fixture；MongoDB 继续由 `infra/test/mongo/init.js` 初始化固定 fixture。等待数据库健康后运行 Spring Boot 单元测试、真实数据库集成测试和 Flutter test；最终只清理本次 project、network、containers、volumes。禁止连接 local/production，禁止宽泛 Docker 清理。mock 不能替代真实数据库集成测试。
 
 ### `build.sh`
 
@@ -159,7 +159,9 @@ MongoDB 只负责论坛文档数据，例如帖子 ID、作者用户 ID、标题
 
 ### `deploy.sh`
 
-只部署一个显式指定且已存在的 release tag；不使用 latest；不自动创建或 push tag；不自动修改 DNS、防火墙、Nginx 主配置或 TLS 账户；不执行数据库破坏性清理或宽泛 Docker prune。服务器信息未确认时只能校验参数/配置，不能编造连接信息。
+只部署一个显式指定且已存在的 release tag；不使用 latest；不自动创建或 push tag；不自动修改 DNS、防火墙或 TLS 账户；不执行数据库破坏性清理或宽泛 Docker prune。
+
+生产使用共享 `campus-nginx`，共享配置路径已明确。部署脚本只管理带本项目 BEGIN/END marker 的 `wm7023` server block，不得修改其他项目配置块。修改宿主 `nginx.conf` 前必须创建备份，并在原 inode 上原位写入；随后校验 host/container marker、SHA-256、`nginx -t` 以及 `nginx -T` 中的本项目 server block。只有全部验证成功才能 graceful reload；失败时在宿主原 inode 上 rollback。脚本不得 restart/recreate 共享 Nginx；若 host/container SHA 不一致等 bind-mount 状态异常，必须安全停止并要求人工检查。
 
 推荐链路：本地 `./check.sh` 通过 → 明确 release tag → 服务器 fetch/checkout 指定 tag → production Compose build/up → health check。
 
@@ -179,7 +181,7 @@ Local：backend、mysql、mongodb 全部通过 Docker 运行；宿主访问只�
 
 Test：每次创建新数据库容器和 volumes；数据库不发布宿主端口；初始化数据固定可重复；测试结束精确清理本次资源。
 
-Production：运行 backend、mysql、mongodb；Nginx 管理方式待服务器负责人确认。backend 只绑定分配的 loopback 宿主端口；MySQL/MongoDB 只绑定 `127.0.0.1` 的唯一端口供 SSH Tunnel；数据库不得暴露公网；所有容器设置资源限制，MySQL/MongoDB 必须设置最大内存；具体额度待确认；使用独立 production volumes；秘密来自服务器环境；设置日志轮转；local/test 不得引用 production project 或 volumes。
+Production：运行 backend、mysql、mongodb；共享 `campus-nginx` 通过 `wm7023-edge` 和唯一 alias `wm7023-backend` 反向代理 backend，MySQL/MongoDB 不加入 edge network。backend 只绑定分配的 loopback 宿主端口；MySQL/MongoDB 只绑定 `127.0.0.1` 的唯一端口供 SSH Tunnel，数据库不得暴露公网。backend、MySQL、MongoDB 的已确认内存上限分别为 `512m`、`384m`、`256m`；使用独立 production volumes；秘密来自服务器环境；设置日志轮转；local/test 不得引用 production project 或 volumes。
 
 ## 9. Secret 与安全规范
 
