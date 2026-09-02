@@ -11,7 +11,7 @@ class ProfilePage extends StatefulWidget {
   });
 
   final ProfileViewModel viewModel;
-  final ValueChanged<User> onUpdate;
+  final Future<void> Function(User) onUpdate;
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -66,7 +66,8 @@ class _ProfilePageState extends State<ProfilePage> {
     if (!mounted || widget.viewModel.sessionExpired) return;
     if (user != null) {
       _applyUser(user);
-      widget.onUpdate(user);
+      await widget.onUpdate(user);
+      if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('已保存')));
     } else {

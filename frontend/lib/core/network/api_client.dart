@@ -35,6 +35,9 @@ class ApiClient {
     () => _client.put(_uri(path), headers: _headers, body: jsonEncode(body)),
   );
 
+  Future<Object?> delete(String path) =>
+      _send(() => _client.delete(_uri(path), headers: _headers));
+
   void close() {
     if (_ownsClient) _client.close();
   }

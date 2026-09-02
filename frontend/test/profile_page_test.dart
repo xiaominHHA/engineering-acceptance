@@ -24,6 +24,9 @@ class FakeUserRepository implements UserRepository {
   String? lastBirthday;
 
   @override
+  Future<User> get(int userId) async => initialUser;
+
+  @override
   Future<User> update(
     int userId, {
     required String nickname,
@@ -50,7 +53,7 @@ class FakeUserRepository implements UserRepository {
 Future<ProfileViewModel> pumpProfile(
   WidgetTester tester,
   FakeUserRepository repository, {
-  ValueChanged<User>? onUpdate,
+  Future<void> Function(User)? onUpdate,
   Size size = const Size(800, 600),
   double textScale = 1,
 }) async {
@@ -68,7 +71,10 @@ Future<ProfileViewModel> pumpProfile(
         child: child!,
       ),
       home: Scaffold(
-        body: ProfilePage(viewModel: viewModel, onUpdate: onUpdate ?? (_) {}),
+        body: ProfilePage(
+          viewModel: viewModel,
+          onUpdate: onUpdate ?? (_) async {},
+        ),
       ),
     ),
   );
@@ -192,7 +198,9 @@ void main() {
     final viewModel = await pumpProfile(
       tester,
       repository,
-      onUpdate: (user) => updatedUser = user,
+      onUpdate: (user) async {
+        updatedUser = user;
+      },
     );
     await tester.enterText(field('昵称'), 'After');
     await tapSave(tester);

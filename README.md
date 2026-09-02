@@ -36,7 +36,7 @@
 
 ## 当前状态
 
-工程基线包含最小用户/个人信息与论坛闭环、短期 bearer token 身份边界、GitHub Actions 质量门禁、release 部署和共享 Nginx 接入。服务器地址、域名、端口、部署目录和共享 Nginx 拓扑已确认；HTTPS/TLS 切换仍以共享基础设施证书就绪为前置条件。
+工程基线包含最小用户/个人信息与论坛闭环、短期 bearer token 身份边界、安全会话恢复、作者昵称和自有帖子删除、GitHub Actions 质量门禁、release 部署及共享 Nginx 接入。服务器地址、域名、端口、部署目录和共享 Nginx 拓扑已确认；HTTPS/TLS 切换仍以共享基础设施证书就绪为前置条件。
 
 MySQL 保存用户账号及个人资料；MongoDB 保存论坛帖子。MySQL schema 在所有环境中只由 Flyway 版本化 migration 管理，Hibernate 只负责校验。local Compose 发布三个本地回环服务，test Compose 使用临时隔离数据库。production Compose 包含 backend、MySQL、MongoDB，三者宿主端口均只绑定 `127.0.0.1`；MySQL/MongoDB 的 loopback 端口用于 SSH Tunnel 管理，公网业务流量通过共享 `campus-nginx` 进入 backend，本项目不额外暴露 backend 或数据库公网端口。
 

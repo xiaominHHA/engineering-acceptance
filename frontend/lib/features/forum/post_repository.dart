@@ -6,6 +6,7 @@ import '../../models/post.dart';
 abstract interface class PostRepository {
   Future<List<Post>> list();
   Future<Post> create(String title, String content);
+  Future<void> delete(String postId);
 }
 
 class HttpPostRepository implements PostRepository {
@@ -55,6 +56,22 @@ class HttpPostRepository implements PostRepository {
     }
   }
 
+  @override
+  Future<void> delete(String postId) async {
+    try {
+      await _client.delete('/api/posts/$postId');
+    } on ApiException catch (error) {
+      throw AppFailure.fromApiException(
+        error,
+        legacyStatusFallback: _legacyDeleteStatus,
+      );
+    } on AppFailure {
+      rethrow;
+    } catch (error) {
+      throw AppFailure(AppFailureType.unknown, message: error.toString());
+    }
+  }
+
   static AppFailureType? _legacyStatus(int statusCode) => switch (statusCode) {
     400 => AppFailureType.validation,
     404 => AppFailureType.notFound,
@@ -63,4 +80,13 @@ class HttpPostRepository implements PostRepository {
     _ when statusCode >= 500 => AppFailureType.server,
     _ => null,
   };
+
+  static AppFailureType? _legacyDeleteStatus(int statusCode) =>
+      switch (statusCode) {
+        401 => AppFailureType.sessionExpired,
+        403 => AppFailureType.forbidden,
+        404 || 405 => AppFailureType.featureUnavailable,
+        _ when statusCode >= 500 => AppFailureType.server,
+        _ => null,
+      };
 }

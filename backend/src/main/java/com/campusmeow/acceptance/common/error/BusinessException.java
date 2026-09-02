@@ -6,6 +6,7 @@ public final class BusinessException extends RuntimeException {
         USERNAME_EXISTS,
         INVALID_CREDENTIALS,
         USER_NOT_FOUND,
+        POST_NOT_FOUND,
         ACCESS_DENIED
     }
 

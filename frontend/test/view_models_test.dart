@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:engineering_acceptance_app/core/error/app_failure.dart';
+import 'package:engineering_acceptance_app/core/session/session_storage.dart';
 import 'package:engineering_acceptance_app/features/auth/auth_repository.dart';
 import 'package:engineering_acceptance_app/features/auth/login_view_model.dart';
 import 'package:engineering_acceptance_app/features/forum/forum_view_model.dart';
@@ -20,6 +21,15 @@ class ControlledAuthRepository implements AuthRepository {
   int loginCalls = 0;
 
   @override
+  Future<void> logout() async {}
+
+  @override
+  Future<StoredSession?> restoreSession() async => null;
+
+  @override
+  Future<void> updateUser(User user) async {}
+
+  @override
   Future<User> login(String username, String password) {
     loginCalls++;
     return loginCompleter.future;
@@ -32,6 +42,9 @@ class ControlledAuthRepository implements AuthRepository {
 
 class FakeUserRepository implements UserRepository {
   Object? error;
+
+  @override
+  Future<User> get(int userId) async => testUser;
 
   @override
   Future<User> update(
@@ -50,8 +63,16 @@ class FakePostRepository implements PostRepository {
   List<Post> listedPosts = const [];
   Object? listError;
   Object? createError;
+  Object? deleteError;
   final createCompleter = Completer<Post>();
   int createCalls = 0;
+  int deleteCalls = 0;
+
+  @override
+  Future<void> delete(String postId) async {
+    deleteCalls++;
+    if (deleteError case final error?) throw error;
+  }
 
   @override
   Future<List<Post>> list() async {
@@ -71,6 +92,9 @@ class ControlledPostRepository implements PostRepository {
   final initialList = Completer<List<Post>>();
   final createCompleter = Completer<Post>();
   int listCalls = 0;
+
+  @override
+  Future<void> delete(String postId) async {}
 
   @override
   Future<List<Post>> list() {
@@ -159,9 +183,11 @@ void main() {
           profileViewModel: profileViewModel,
           forumViewModel: forumViewModel,
           currentUserId: testUser.id,
-          onUpdate: (_) {},
-          onLogout: () {},
-          onSessionExpired: () => expiryCallbacks++,
+          onUpdate: (_) async {},
+          onLogout: () async {},
+          onSessionExpired: () async {
+            expiryCallbacks++;
+          },
         ),
       ),
     );
@@ -293,4 +319,31 @@ void main() {
 
     expect(viewModel.posts.map((post) => post.id), ['newer', 'older']);
   });
+
+  test(
+    'forum removes only after delete success and retains failed post',
+    () async {
+      const owned = Post(
+        id: 'owned',
+        authorUserId: 1,
+        title: 'Owned',
+        content: 'Content',
+      );
+      final repository = FakePostRepository()..listedPosts = const [owned];
+      final viewModel = ForumViewModel(repository);
+      await viewModel.load();
+
+      repository.deleteError = const AppFailure(
+        AppFailureType.featureUnavailable,
+      );
+      expect(await viewModel.delete(owned.id), isFalse);
+      expect(viewModel.posts, contains(owned));
+      expect(viewModel.deleteErrorMessage, '当前服务器版本暂不支持删除帖子');
+
+      repository.deleteError = null;
+      expect(await viewModel.delete(owned.id), isTrue);
+      expect(viewModel.posts, isEmpty);
+      expect(repository.deleteCalls, 2);
+    },
+  );
 }

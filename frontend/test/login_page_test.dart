@@ -1,4 +1,5 @@
 import 'package:engineering_acceptance_app/core/error/app_failure.dart';
+import 'package:engineering_acceptance_app/core/session/session_storage.dart';
 import 'package:engineering_acceptance_app/features/auth/auth_repository.dart';
 import 'package:engineering_acceptance_app/features/auth/login_page.dart';
 import 'package:engineering_acceptance_app/features/auth/login_view_model.dart';
@@ -13,6 +14,15 @@ class FakeAuthRepository implements AuthRepository {
   Object? registerError;
 
   static const user = User(id: 1, username: 'tester', nickname: 'Tester');
+
+  @override
+  Future<void> logout() async {}
+
+  @override
+  Future<StoredSession?> restoreSession() async => null;
+
+  @override
+  Future<void> updateUser(User user) async {}
 
   @override
   Future<User> login(String username, String password) async {

@@ -22,7 +22,7 @@ public class GlobalExceptionHandler {
         HttpStatus status = switch (exception.getCode()) {
             case USERNAME_EXISTS -> HttpStatus.CONFLICT;
             case INVALID_CREDENTIALS -> HttpStatus.UNAUTHORIZED;
-            case USER_NOT_FOUND -> HttpStatus.NOT_FOUND;
+            case USER_NOT_FOUND, POST_NOT_FOUND -> HttpStatus.NOT_FOUND;
             case ACCESS_DENIED -> HttpStatus.FORBIDDEN;
         };
         return ResponseEntity.status(status).body(new ApiError(

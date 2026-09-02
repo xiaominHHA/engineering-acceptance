@@ -2,13 +2,40 @@ import 'dart:convert';
 
 import 'package:engineering_acceptance_app/core/error/app_failure.dart';
 import 'package:engineering_acceptance_app/core/network/api_client.dart';
+import 'package:engineering_acceptance_app/core/session/session_storage.dart';
 import 'package:engineering_acceptance_app/features/auth/auth_repository.dart';
 import 'package:engineering_acceptance_app/features/forum/post_repository.dart';
 import 'package:engineering_acceptance_app/features/profile/user_repository.dart';
 import 'package:engineering_acceptance_app/models/post.dart';
+import 'package:engineering_acceptance_app/models/user.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+
+class MemorySessionStorage implements SessionStorage {
+  StoredSession? value;
+  int clearCalls = 0;
+
+  @override
+  Future<void> clear() async {
+    clearCalls++;
+    value = null;
+  }
+
+  @override
+  Future<StoredSession?> read() async => value;
+
+  @override
+  Future<void> write(StoredSession session) async => value = session;
+}
+
+HttpAuthRepository createAuthRepository(
+  ApiClient client, {
+  MemorySessionStorage? storage,
+}) => HttpAuthRepository(
+  client,
+  sessionStorage: storage ?? MemorySessionStorage(),
+);
 
 void main() {
   test('auth repository maps backend error codes to typed failures', () async {
@@ -21,7 +48,7 @@ void main() {
     };
 
     for (final entry in cases.entries) {
-      final repository = HttpAuthRepository(
+      final repository = createAuthRepository(
         ApiClient(
           client: MockClient(
             (_) async => http.Response(
@@ -48,7 +75,7 @@ void main() {
   });
 
   test('auth repository maps a successful response to User', () async {
-    final repository = HttpAuthRepository(
+    final repository = createAuthRepository(
       ApiClient(
         client: MockClient(
           (_) async => http.Response(
@@ -89,7 +116,7 @@ void main() {
       }),
       baseUrl: 'http://example.test',
     );
-    final authRepository = HttpAuthRepository(apiClient);
+    final authRepository = createAuthRepository(apiClient);
     final postRepository = HttpPostRepository(apiClient);
 
     await authRepository.login('legacy-user', 'password123');
@@ -102,6 +129,7 @@ void main() {
 
     expect(postBody, {'authorUserId': 7, 'title': '早上好', 'content': '吃早餐了吗'});
     expect(post.title, '早上好');
+    expect(post.authorNickname, isNull);
   });
 
   test('authenticated repositories send the in-memory bearer token', () async {
@@ -123,7 +151,7 @@ void main() {
       }),
       baseUrl: 'http://example.test',
     );
-    final authRepository = HttpAuthRepository(apiClient);
+    final authRepository = createAuthRepository(apiClient);
     final userRepository = HttpUserRepository(apiClient);
 
     await authRepository.login('tester', 'password123');
@@ -149,7 +177,7 @@ void main() {
       );
     }
 
-    HttpAuthRepository authWithStatus(int statusCode) => HttpAuthRepository(
+    HttpAuthRepository authWithStatus(int statusCode) => createAuthRepository(
       ApiClient(
         client: MockClient(
           (_) async => http.Response(
@@ -195,7 +223,7 @@ void main() {
   });
 
   test('new error codes take priority over legacy status fallback', () async {
-    final knownCodeRepository = HttpAuthRepository(
+    final knownCodeRepository = createAuthRepository(
       ApiClient(
         client: MockClient(
           (_) async => http.Response(
@@ -218,7 +246,7 @@ void main() {
       ),
     );
 
-    final unknownCodeRepository = HttpAuthRepository(
+    final unknownCodeRepository = createAuthRepository(
       ApiClient(
         client: MockClient(
           (_) async => http.Response(
@@ -267,4 +295,181 @@ void main() {
       ),
     );
   });
+
+  test(
+    'post repository parses nickname and maps delete compatibility',
+    () async {
+      final nicknameRepository = HttpPostRepository(
+        ApiClient(
+          client: MockClient(
+            (_) async => http.Response(
+              '[{"id":"post-1","authorUserId":7,"authorNickname":"真实昵称",'
+              '"title":"Title","content":"Content"}]',
+              200,
+              headers: const {
+                'content-type': 'application/json; charset=utf-8',
+              },
+            ),
+          ),
+          baseUrl: 'http://example.test',
+        ),
+      );
+      expect((await nicknameRepository.list()).single.authorNickname, '真实昵称');
+
+      for (final status in [404, 405]) {
+        final legacyRepository = HttpPostRepository(
+          ApiClient(
+            client: MockClient((_) async => http.Response('{}', status)),
+            baseUrl: 'http://example.test',
+          ),
+        );
+        await expectLater(
+          legacyRepository.delete('post-1'),
+          throwsA(
+            isA<AppFailure>().having(
+              (failure) => failure.type,
+              'legacy delete type',
+              AppFailureType.featureUnavailable,
+            ),
+          ),
+        );
+      }
+
+      final currentRepository = HttpPostRepository(
+        ApiClient(
+          client: MockClient(
+            (_) async => http.Response(
+              '{"code":"POST_NOT_FOUND","message":"missing",'
+              '"fieldErrors":{}}',
+              404,
+            ),
+          ),
+          baseUrl: 'http://example.test',
+        ),
+      );
+      await expectLater(
+        currentRepository.delete('post-1'),
+        throwsA(
+          isA<AppFailure>().having(
+            (failure) => failure.type,
+            'current delete type',
+            AppFailureType.notFound,
+          ),
+        ),
+      );
+    },
+  );
+
+  test('new bearer session is saved and restored with expiry', () async {
+    final storage = MemorySessionStorage();
+    final loginClient = ApiClient(
+      client: MockClient(
+        (_) async => http.Response(
+          '{"accessToken":"signed-token","expiresAt":"2030-01-01T00:00:00Z",'
+          '"user":{"id":7,"username":"tester","nickname":"Tester"}}',
+          200,
+        ),
+      ),
+      baseUrl: 'http://example.test',
+    );
+    await createAuthRepository(
+      loginClient,
+      storage: storage,
+    ).login('tester', 'password123');
+
+    expect(storage.value?.accessToken, 'signed-token');
+    expect(storage.value?.expiresAt, DateTime.utc(2030));
+
+    String? authorization;
+    final restoredClient = ApiClient(
+      client: MockClient((request) async {
+        authorization = request.headers['authorization'];
+        return http.Response(
+          '{"id":7,"username":"tester","nickname":"Tester"}',
+          200,
+        );
+      }),
+      baseUrl: 'http://example.test',
+    );
+    final restored = await createAuthRepository(
+      restoredClient,
+      storage: storage,
+    ).restoreSession();
+    await HttpUserRepository(restoredClient).get(restored!.user.id);
+
+    expect(restored.isLegacy, isFalse);
+    expect(authorization, 'Bearer signed-token');
+  });
+
+  test('logout and expired bearer session clear persisted state', () async {
+    final storage = MemorySessionStorage()
+      ..value = StoredSession(
+        user: const User(id: 7, username: 'tester', nickname: 'Tester'),
+        accessToken: 'expired-token',
+        expiresAt: DateTime.utc(2020),
+      );
+    final repository = createAuthRepository(
+      ApiClient(
+        client: MockClient((_) async => http.Response('{}', 500)),
+        baseUrl: 'http://example.test',
+      ),
+      storage: storage,
+    );
+
+    await expectLater(
+      repository.restoreSession(),
+      throwsA(
+        isA<AppFailure>().having(
+          (failure) => failure.type,
+          'failure type',
+          AppFailureType.sessionExpired,
+        ),
+      ),
+    );
+    expect(storage.value, isNull);
+
+    storage.value = const StoredSession(
+      user: User(id: 7, username: 'legacy', nickname: 'Legacy'),
+    );
+    final legacy = await repository.restoreSession();
+    expect(legacy?.isLegacy, isTrue);
+    await repository.logout();
+    expect(storage.value, isNull);
+  });
+
+  test(
+    'legacy session survives restart until secured API rejects it',
+    () async {
+      final storage = MemorySessionStorage()
+        ..value = const StoredSession(
+          user: User(id: 7, username: 'legacy', nickname: 'Legacy'),
+        );
+      final client = ApiClient(
+        client: MockClient(
+          (_) async => http.Response(
+            '{"code":"AUTHENTICATION_REQUIRED","message":"login",'
+            '"fieldErrors":{}}',
+            401,
+          ),
+        ),
+        baseUrl: 'http://example.test',
+      );
+      final auth = createAuthRepository(client, storage: storage);
+
+      final restored = await auth.restoreSession();
+      expect(restored?.isLegacy, isTrue);
+      await expectLater(
+        HttpUserRepository(client).update(7, nickname: 'Legacy'),
+        throwsA(
+          isA<AppFailure>().having(
+            (failure) => failure.type,
+            'failure type',
+            AppFailureType.sessionExpired,
+          ),
+        ),
+      );
+      await auth.logout();
+      expect(storage.value, isNull);
+    },
+  );
 }

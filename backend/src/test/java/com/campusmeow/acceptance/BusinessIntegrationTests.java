@@ -1,7 +1,12 @@
 package com.campusmeow.acceptance;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -37,6 +42,8 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 import com.campusmeow.acceptance.user.entity.User;
 import com.campusmeow.acceptance.user.repository.UserRepository;
+import com.campusmeow.acceptance.forum.document.Post;
+import com.campusmeow.acceptance.forum.repository.PostRepository;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -57,6 +64,9 @@ class BusinessIntegrationTests {
 
     @MockitoSpyBean
     private UserRepository userRepository;
+
+    @Autowired
+    private PostRepository postRepository;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -104,6 +114,7 @@ class BusinessIntegrationTests {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.authorUserId").value(authenticated.userId()))
+                .andExpect(jsonPath("$.authorNickname").value("Updated API User"))
                 .andExpect(jsonPath("$.title").value("Integration post"));
 
         mockMvc.perform(get("/api/posts"))
@@ -173,6 +184,70 @@ class BusinessIntegrationTests {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + expiredToken))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
+    }
+
+    @Test
+    void enrichesPostNicknamesWithOneBatchUserLookupAndStableFallback() throws Exception {
+        AuthenticatedUser userA = register("nickname-user-a", "password123", "Nickname A");
+        AuthenticatedUser userB = register("nickname-user-b", "password123", "Nickname B");
+
+        mockMvc.perform(authenticated(post("/api/posts"), userA.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Post A\",\"content\":\"Content A\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.authorNickname").value("Nickname A"));
+        mockMvc.perform(authenticated(post("/api/posts"), userB.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Post B\",\"content\":\"Content B\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.authorNickname").value("Nickname B"));
+
+        Post unknownAuthor = new Post();
+        unknownAuthor.setAuthorUserId(99999999L);
+        unknownAuthor.setTitle("Unknown author");
+        unknownAuthor.setContent("Fallback nickname");
+        unknownAuthor.setCreatedAt(Instant.now());
+        unknownAuthor.setUpdatedAt(Instant.now());
+        postRepository.save(unknownAuthor);
+
+        clearInvocations(userRepository);
+        mockMvc.perform(get("/api/posts"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.title == 'Post A')].authorNickname")
+                        .value(org.hamcrest.Matchers.hasItem("Nickname A")))
+                .andExpect(jsonPath("$[?(@.title == 'Post B')].authorNickname")
+                        .value(org.hamcrest.Matchers.hasItem("Nickname B")))
+                .andExpect(jsonPath("$[?(@.title == 'Unknown author')].authorNickname")
+                        .value(org.hamcrest.Matchers.hasItem("社区用户")));
+        verify(userRepository, times(1)).findAllById(any());
+    }
+
+    @Test
+    void onlyPostAuthorCanDeleteAndMissingPostReturnsNotFound() throws Exception {
+        AuthenticatedUser author = register("delete-author", "password123", "Delete Author");
+        AuthenticatedUser other = register("delete-other", "password123", "Delete Other");
+        MvcResult created = mockMvc.perform(authenticated(post("/api/posts"), author.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Delete me\",\"content\":\"Owned post\"}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        String postId = objectMapper.readTree(created.getResponse().getContentAsByteArray())
+                .path("id").asText();
+
+        mockMvc.perform(delete("/api/posts/{id}", postId))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(authenticated(delete("/api/posts/{id}", postId), other.token()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+        assertThat(postRepository.existsById(postId)).isTrue();
+
+        mockMvc.perform(authenticated(delete("/api/posts/{id}", "missing-post"), author.token()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("POST_NOT_FOUND"));
+
+        mockMvc.perform(authenticated(delete("/api/posts/{id}", postId), author.token()))
+                .andExpect(status().isNoContent());
+        assertThat(postRepository.existsById(postId)).isFalse();
     }
 
     @Test

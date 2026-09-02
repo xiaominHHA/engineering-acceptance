@@ -33,6 +33,15 @@ class LoginViewModel extends ChangeNotifier {
     _notify();
   }
 
+  void showRestoreFailure(AppFailure failure) {
+    errorMessage = switch (failure.type) {
+      AppFailureType.network => '无法恢复登录状态，请检查网络后重新登录',
+      AppFailureType.server => '服务器暂时无法验证登录状态，请稍后重试',
+      _ => '无法恢复登录状态，请重新登录',
+    };
+    _notify();
+  }
+
   Future<User?> _submit(
     Future<User> Function() request, {
     required bool registering,
@@ -73,6 +82,7 @@ class LoginViewModel extends ChangeNotifier {
           registering ? '用户名已存在，请更换用户名' : '请求发生冲突，请稍后重试',
         AppFailureType.sessionExpired => '登录已失效，请重新登录',
         AppFailureType.forbidden => '没有权限执行此操作',
+        AppFailureType.featureUnavailable => '当前服务器版本暂不支持此操作',
         AppFailureType.validation => '输入不符合要求，请检查后重试',
         AppFailureType.network => '无法连接服务器，请检查网络后重试',
         AppFailureType.notFound => '请求的内容不存在',

@@ -144,6 +144,34 @@ class _ForumPageState extends State<ForumPage> {
     }
   }
 
+  Future<void> confirmDelete(Post post) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('删除帖子？'),
+        content: const Text('删除后无法恢复。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final deleted = await widget.viewModel.delete(post.id);
+    if (!mounted || widget.viewModel.sessionExpired) return;
+    final message = deleted
+        ? '帖子已删除'
+        : widget.viewModel.deleteErrorMessage ?? '删除失败，请稍后重试';
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
   @override
   void dispose() {
     title.dispose();
@@ -217,6 +245,14 @@ class _ForumPageState extends State<ForumPage> {
           isCurrentUser:
               widget.viewModel.posts[postIndex].authorUserId ==
               widget.currentUserId,
+          deleting: widget.viewModel.deletingPostIds.contains(
+            widget.viewModel.posts[postIndex].id,
+          ),
+          onDelete:
+              widget.viewModel.posts[postIndex].authorUserId ==
+                  widget.currentUserId
+              ? () => confirmDelete(widget.viewModel.posts[postIndex])
+              : null,
         );
       },
     );
@@ -224,10 +260,17 @@ class _ForumPageState extends State<ForumPage> {
 }
 
 class _PostCard extends StatelessWidget {
-  const _PostCard({required this.post, required this.isCurrentUser});
+  const _PostCard({
+    required this.post,
+    required this.isCurrentUser,
+    required this.deleting,
+    this.onDelete,
+  });
 
   final Post post;
   final bool isCurrentUser;
+  final bool deleting;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -248,7 +291,7 @@ class _PostCard extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  isCurrentUser ? '我' : '社区用户',
+                  post.authorNickname ?? (isCurrentUser ? '我' : '社区用户'),
                   style: Theme.of(context).textTheme.labelLarge
                       ?.copyWith(fontWeight: FontWeight.w600),
                 ),
@@ -260,6 +303,22 @@ class _PostCard extends StatelessWidget {
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
+              if (onDelete != null)
+                deleting
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : PopupMenuButton<String>(
+                        tooltip: '帖子操作',
+                        onSelected: (_) => onDelete!(),
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(value: 'delete', child: Text('删除帖子')),
+                        ],
+                      ),
             ],
           ),
           const SizedBox(height: 14),

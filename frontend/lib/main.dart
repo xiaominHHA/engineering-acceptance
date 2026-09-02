@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'core/network/api_client.dart';
+import 'core/error/app_failure.dart';
+import 'core/session/session_storage.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/auth_repository.dart';
 import 'features/auth/login_page.dart';
@@ -16,47 +18,94 @@ import 'models/user.dart';
 void main() => runApp(const MyApp());
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, this.apiClient, this.sessionStorage});
+
+  final ApiClient? apiClient;
+  final SessionStorage? sessionStorage;
   @override
   State<MyApp> createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> {
   late final ApiClient apiClient;
+  late final HttpAuthRepository authRepository;
   late final LoginViewModel loginViewModel;
   late final UserRepository userRepository;
   late final PostRepository postRepository;
   ProfileViewModel? profileViewModel;
   ForumViewModel? forumViewModel;
   User? user;
+  bool restoringSession = true;
 
   @override
   void initState() {
     super.initState();
-    apiClient = ApiClient();
-    loginViewModel = LoginViewModel(HttpAuthRepository(apiClient));
+    apiClient = widget.apiClient ?? ApiClient();
+    authRepository = HttpAuthRepository(
+      apiClient,
+      sessionStorage: widget.sessionStorage,
+    );
+    loginViewModel = LoginViewModel(authRepository);
     userRepository = HttpUserRepository(apiClient);
     postRepository = HttpPostRepository(apiClient);
+    _restoreSession();
   }
 
-  void login(User value) {
+  Future<void> _restoreSession() async {
+    try {
+      final session = await authRepository.restoreSession();
+      if (!mounted) return;
+      if (session == null) {
+        setState(() => restoringSession = false);
+        return;
+      }
+
+      var restoredUser = session.user;
+      if (!session.isLegacy) {
+        restoredUser = await userRepository.get(restoredUser.id);
+        await authRepository.updateUser(restoredUser);
+      }
+      if (mounted) _activateSession(restoredUser);
+    } on AppFailure catch (failure) {
+      if (failure.type == AppFailureType.sessionExpired) {
+        await authRepository.logout();
+        loginViewModel.showSessionExpired();
+      } else {
+        loginViewModel.showRestoreFailure(failure);
+      }
+      if (mounted) setState(() => restoringSession = false);
+    } catch (_) {
+      loginViewModel.showRestoreFailure(
+        const AppFailure(AppFailureType.unknown),
+      );
+      if (mounted) setState(() => restoringSession = false);
+    }
+  }
+
+  void _activateSession(User value) {
     profileViewModel?.dispose();
     forumViewModel?.dispose();
     setState(() {
       user = value;
+      restoringSession = false;
       profileViewModel = ProfileViewModel(userRepository, value);
       forumViewModel = ForumViewModel(postRepository);
     });
   }
 
-  void logout({bool sessionExpired = false}) {
+  Future<void> logout({bool sessionExpired = false}) async {
     profileViewModel?.dispose();
     forumViewModel?.dispose();
     profileViewModel = null;
     forumViewModel = null;
-    apiClient.clearSession();
     setState(() => user = null);
+    await authRepository.logout();
     if (sessionExpired) loginViewModel.showSessionExpired();
+  }
+
+  Future<void> updateUser(User value) async {
+    setState(() => user = value);
+    await authRepository.updateUser(value);
   }
 
   @override
@@ -73,17 +122,21 @@ class _MyAppState extends State<MyApp> {
     title: 'Engineering Acceptance',
     debugShowCheckedModeBanner: false,
     theme: AppTheme.light,
-    home: user == null
+    home: restoringSession
+        ? const Scaffold(body: Center(child: CircularProgressIndicator()))
+        : user == null
         ? LoginPage(viewModel: loginViewModel, onLogin: login)
         : HomePage(
             profileViewModel: profileViewModel!,
             forumViewModel: forumViewModel!,
-            onUpdate: (value) => setState(() => user = value),
+            onUpdate: updateUser,
             currentUserId: user!.id,
-            onLogout: () => logout(),
+            onLogout: logout,
             onSessionExpired: () => logout(sessionExpired: true),
           ),
   );
+
+  void login(User value) => _activateSession(value);
 }
 
 class HomePage extends StatefulWidget {
@@ -99,9 +152,9 @@ class HomePage extends StatefulWidget {
   final ProfileViewModel profileViewModel;
   final ForumViewModel forumViewModel;
   final int currentUserId;
-  final ValueChanged<User> onUpdate;
-  final VoidCallback onLogout;
-  final VoidCallback onSessionExpired;
+  final Future<void> Function(User) onUpdate;
+  final Future<void> Function() onLogout;
+  final Future<void> Function() onSessionExpired;
   @override
   State<HomePage> createState() => _HomePageState();
 }
@@ -124,8 +177,8 @@ class _HomePageState extends State<HomePage> {
       return;
     }
     handlingSessionExpiry = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) widget.onSessionExpired();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (mounted) await widget.onSessionExpired();
     });
   }
 
@@ -155,7 +208,7 @@ class _HomePageState extends State<HomePage> {
         title: Text(index == 0 ? '个人资料' : '论坛'),
         actions: [
           IconButton(
-            onPressed: widget.onLogout,
+            onPressed: () async => widget.onLogout(),
             icon: const Icon(Icons.logout),
             tooltip: '退出登录',
           ),

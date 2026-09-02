@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 const existingPost = Post(
   id: 'existing',
   authorUserId: 1,
+  authorNickname: '真实昵称',
   title: 'Existing title',
   content: 'Existing content',
 );
@@ -27,6 +28,8 @@ class QueuePostRepository implements PostRepository {
   Object? createError;
   int listCalls = 0;
   int createCalls = 0;
+  Object? deleteError;
+  int deleteCalls = 0;
 
   @override
   Future<List<Post>> list() async {
@@ -50,6 +53,12 @@ class QueuePostRepository implements PostRepository {
       content: content,
     );
   }
+
+  @override
+  Future<void> delete(String postId) async {
+    deleteCalls++;
+    if (deleteError case final value?) throw value;
+  }
 }
 
 Future<ForumViewModel> pumpForum(
@@ -57,6 +66,7 @@ Future<ForumViewModel> pumpForum(
   QueuePostRepository repository, {
   Size size = const Size(800, 800),
   double textScale = 1,
+  int? currentUserId,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -71,7 +81,9 @@ Future<ForumViewModel> pumpForum(
             .copyWith(textScaler: TextScaler.linear(textScale)),
         child: child!,
       ),
-      home: Scaffold(body: ForumPage(viewModel: viewModel)),
+      home: Scaffold(
+        body: ForumPage(viewModel: viewModel, currentUserId: currentUserId),
+      ),
     ),
   );
   return viewModel;
@@ -225,6 +237,52 @@ void main() {
 
     expect(find.text('Existing title'), findsOneWidget);
     expect(find.textContaining('无法连接服务器，请检查网络后重试'), findsOneWidget);
+  });
+
+  testWidgets('own post delete keeps failed item and removes after success', (
+    tester,
+  ) async {
+    final repository = QueuePostRepository()
+      ..listResults.add(<Post>[existingPost])
+      ..deleteError = const AppFailure(AppFailureType.featureUnavailable);
+    await pumpForum(tester, repository, currentUserId: 1);
+    await tester.pumpAndSettle();
+    expect(find.text('真实昵称'), findsOneWidget);
+
+    Future<void> confirmDelete() async {
+      await tester.tap(find.byTooltip('帖子操作'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('删除帖子'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '删除'));
+      await tester.pumpAndSettle();
+    }
+
+    await confirmDelete();
+    expect(find.text(existingPost.title), findsOneWidget);
+    expect(find.text('当前服务器版本暂不支持删除帖子'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+
+    repository.deleteError = null;
+    await tester.tap(find.byTooltip('帖子操作'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('删除帖子'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '删除'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text(existingPost.title), findsNothing);
+    expect(find.text('帖子已删除'), findsOneWidget);
+  });
+
+  testWidgets('delete action is hidden for another user post', (tester) async {
+    final repository = QueuePostRepository()
+      ..listResults.add(<Post>[existingPost]);
+    await pumpForum(tester, repository, currentUserId: 2);
+    await tester.pumpAndSettle();
+
+    expect(find.text('真实昵称'), findsOneWidget);
+    expect(find.byTooltip('帖子操作'), findsNothing);
   });
 
   testWidgets('small viewport and large text render without exceptions', (

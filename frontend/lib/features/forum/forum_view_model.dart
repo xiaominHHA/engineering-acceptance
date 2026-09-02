@@ -13,13 +13,16 @@ class ForumViewModel extends ChangeNotifier {
   bool _disposed = false;
   Future<void>? _activeLoad;
   int _contentRevision = 0;
+  final Set<String> _deletedPostIds = {};
 
   ForumLoadState loadState = ForumLoadState.initial;
   List<Post> posts = const [];
   String? loadErrorMessage;
   bool isRefreshing = false;
   bool isPublishing = false;
+  final Set<String> deletingPostIds = {};
   String? publishErrorMessage;
+  String? deleteErrorMessage;
   bool sessionExpired = false;
 
   void clearPublishError() {
@@ -93,13 +96,40 @@ class ForumViewModel extends ChangeNotifier {
     }
   }
 
+  Future<bool> delete(String postId) async {
+    if (deletingPostIds.contains(postId)) return false;
+    deletingPostIds.add(postId);
+    deleteErrorMessage = null;
+    sessionExpired = false;
+    _notify();
+    try {
+      await _repository.delete(postId);
+      _contentRevision++;
+      _deletedPostIds.add(postId);
+      posts = List.unmodifiable(posts.where((post) => post.id != postId));
+      loadState = posts.isEmpty ? ForumLoadState.empty : ForumLoadState.success;
+      return true;
+    } on AppFailure catch (failure) {
+      deleteErrorMessage = _deleteMessageFor(failure);
+      sessionExpired = failure.type == AppFailureType.sessionExpired;
+      return false;
+    } catch (_) {
+      deleteErrorMessage = '删除失败，请稍后重试';
+      return false;
+    } finally {
+      deletingPostIds.remove(postId);
+      _notify();
+    }
+  }
+
   void _notify() {
     if (!_disposed) notifyListeners();
   }
 
-  static List<Post> _normalized(Iterable<Post> source) {
+  List<Post> _normalized(Iterable<Post> source) {
     final byId = <String, Post>{};
     for (final post in source) {
+      if (_deletedPostIds.contains(post.id)) continue;
       byId.putIfAbsent(post.id, () => post);
     }
     final indexed = byId.values.indexed.toList();
@@ -141,5 +171,15 @@ class ForumViewModel extends ChangeNotifier {
     AppFailureType.sessionExpired => '登录已失效，请重新登录',
     AppFailureType.forbidden => '没有权限发布帖子',
     _ => '发布失败，请稍后重试',
+  };
+
+  String _deleteMessageFor(AppFailure failure) => switch (failure.type) {
+    AppFailureType.featureUnavailable => '当前服务器版本暂不支持删除帖子',
+    AppFailureType.notFound => '帖子不存在或已被删除',
+    AppFailureType.forbidden => '只能删除自己发布的帖子',
+    AppFailureType.sessionExpired => '登录已失效，请重新登录',
+    AppFailureType.network => '无法连接服务器，帖子未删除',
+    AppFailureType.server => '服务器暂时无法删除帖子，请稍后重试',
+    _ => '删除失败，请稍后重试',
   };
 }

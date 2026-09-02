@@ -4,6 +4,7 @@ import '../../core/network/api_exception.dart';
 import '../../models/user.dart';
 
 abstract interface class UserRepository {
+  Future<User> get(int userId);
   Future<User> update(
     int userId, {
     required String nickname,
@@ -19,6 +20,10 @@ class HttpUserRepository implements UserRepository {
   final ApiClient _client;
 
   @override
+  Future<User> get(int userId) =>
+      _requestUser(() => _client.get('/api/users/$userId'));
+
+  @override
   Future<User> update(
     int userId, {
     required String nickname,
@@ -26,13 +31,19 @@ class HttpUserRepository implements UserRepository {
     String? school,
     String? className,
   }) async {
-    try {
-      final json = await _client.put('/api/users/$userId', {
+    return _requestUser(
+      () => _client.put('/api/users/$userId', {
         'nickname': nickname,
         'birthday': birthday,
         'school': school,
         'className': className,
-      });
+      }),
+    );
+  }
+
+  Future<User> _requestUser(Future<Object?> Function() request) async {
+    try {
+      final json = await request();
       return User.fromJson(Map<String, dynamic>.from(json! as Map));
     } on ApiException catch (error) {
       throw AppFailure.fromApiException(

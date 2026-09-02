@@ -7,6 +7,7 @@ enum AppFailureType {
   sessionExpired,
   forbidden,
   notFound,
+  featureUnavailable,
   network,
   server,
   unknown,
@@ -33,6 +34,7 @@ class AppFailure implements Exception {
             'INVALID_CREDENTIALS' => AppFailureType.invalidCredentials,
             'USERNAME_EXISTS' => AppFailureType.usernameExists,
             'USER_NOT_FOUND' => AppFailureType.notFound,
+            'POST_NOT_FOUND' => AppFailureType.notFound,
             'AUTHENTICATION_REQUIRED' ||
             'TOKEN_INVALID_OR_EXPIRED' => AppFailureType.sessionExpired,
             'ACCESS_DENIED' => AppFailureType.forbidden,

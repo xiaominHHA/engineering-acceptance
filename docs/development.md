@@ -39,7 +39,7 @@ chmod 600 "$HOME/.config/engineering-acceptance/android-signing.properties"
 ./build.sh
 ```
 
-密码不写入仓库、命令参数或日志。CI 使用加密 secrets 恢复临时 keystore。可用 Android SDK 的 `apksigner verify --verbose --print-certs <apk>` 验证签名和证书 SHA-256 fingerprint；release 配置缺失时构建会明确失败。
+密码不写入仓库、命令参数或日志。CI 的普通分支和 PR 使用显式 debug APK 验证构建，不读取 production signing secrets；仅 release tag 使用加密 secrets 恢复临时 keystore并构建正式签名 APK。可用 Android SDK 的 `apksigner verify --verbose --print-certs <apk>` 验证签名和证书 SHA-256 fingerprint；release 配置缺失时构建会明确失败。
 
 Spring Boot 骨架通过官方 `https://start.spring.io/starter.zip` 创建，参数为 Maven、Java 21、Jar、group/package `com.campusmeow.acceptance`、artifact/name `engineering-acceptance-backend`，以及 Web、Validation、Actuator、JPA、MySQL、MongoDB 依赖。
 
@@ -49,4 +49,4 @@ Spring Boot 骨架通过官方 `https://start.spring.io/starter.zip` 创建，�
 
 fresh local volume 启动时由 backend 执行 Flyway migration，再由 Hibernate 校验 schema。existing local volume 如果出现 schema drift，应先审计并显式处理；不得永久启用 `baseline-on-migrate`，也不得通过删除 production 数据解决 migration 问题。
 
-本地和测试环境使用明确标记为非生产的 token signing key。production 必须通过服务器 secret 文件提供至少 32 字节的独立随机 `APP_AUTH_SIGNING_KEY`；token 默认有效期为 30 分钟，App 重启后重新登录，不持久化凭证。
+本地和测试环境使用明确标记为非生产的 token signing key。production 必须通过服务器 secret 文件提供至少 32 字节的独立随机 `APP_AUTH_SIGNING_KEY`；token 默认有效期为 30 分钟。Flutter 使用 `flutter_secure_storage` 持久化必要 session，启动时对未过期 bearer token 调用受保护资料接口验证；过期或 401 会清除 session。旧后端无 token 响应仅作为 rollout 期间的 UI continuity 保存，不能通过新后端认证。

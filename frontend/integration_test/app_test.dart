@@ -2,6 +2,7 @@ import 'package:engineering_acceptance_app/main.dart' as app;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 Future<void> waitFor(WidgetTester tester, Finder finder) async {
   for (var attempt = 0; attempt < 150; attempt++) {
@@ -23,6 +24,7 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('complete isolated user and forum flow', (tester) async {
+    await const FlutterSecureStorage().deleteAll();
     final suffix = DateTime.now().microsecondsSinceEpoch;
     final username = 'integration-$suffix';
     const password = 'integration-password-123';
