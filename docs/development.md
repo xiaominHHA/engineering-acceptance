@@ -1,6 +1,6 @@
 # 本地开发
 
-目标环境为 WSL Ubuntu。当前已确认工具版本：
+目标环境为 WSL Ubuntu，项目自动化统一使用 Bash/`sh`；不提供或依赖 PowerShell 版本的 harness。当前已确认工具版本：
 
 - Flutter 3.47.1 stable
 - Dart 3.13.1
@@ -50,3 +50,5 @@ Spring Boot 骨架通过官方 `https://start.spring.io/starter.zip` 创建，�
 fresh local volume 启动时由 backend 执行 Flyway migration，再由 Hibernate 校验 schema。existing local volume 如果出现 schema drift，应先审计并显式处理；不得永久启用 `baseline-on-migrate`，也不得通过删除 production 数据解决 migration 问题。
 
 本地和测试环境使用明确标记为非生产的 token signing key。production 必须通过服务器 secret 文件提供至少 32 字节的独立随机 `APP_AUTH_SIGNING_KEY`；token 默认有效期为 30 分钟。Flutter 使用 `flutter_secure_storage` 持久化必要 session，启动时对未过期 bearer token 调用受保护资料接口验证；过期或 401 会清除 session。旧后端无 token 响应仅作为 rollout 期间的 UI continuity 保存，不能通过新后端认证。
+
+当前 APK 以真实 Android 手机作为主要交付验证设备；MuMu 模拟器启动兼容性尚未关闭，不据此改动 secure storage 或 Android SDK baseline。实现、真机和生产状态分别记录在 [项目状态](status.md)。

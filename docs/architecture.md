@@ -20,5 +20,6 @@
 - 后端通过小型业务异常和全局 REST advice 返回稳定的 `code`、`message`、`fieldErrors` 错误 contract；Service 不使用 HTTP 异常表达业务错误。
 - 注册和登录返回短期 HS256 bearer token 与当前用户。token 仅包含 user subject、签发/过期时间，签名密钥来自环境且不进入 Git；Flutter 通过 Android secure storage 保存必要 session，启动时验证未过期 token，401 或显式退出会同时清除内存与持久化 session。服务端保持无状态，不提供 refresh token。
 - `GET/PUT /api/users/{id}` 要求 token subject 与 path id 一致，匿名访问返回 401、跨用户访问返回 403。`POST /api/posts` 和 `DELETE /api/posts/{id}` 只信任 authenticated principal，且仅作者可删除自己的帖子；`GET /api/posts` 保持匿名可读。帖子列表批量读取关联用户昵称，避免逐帖查询 MySQL。
+- rollout 期间 Flutter 发帖请求仍携带旧 `v1.0.10` 所需的 `authorUserId`；新后端兼容接收但不使用该字段授权或决定作者，实际作者始终来自 authenticated principal。旧后端退役后应删除这一临时请求字段。
 
 MySQL schema 的唯一 owner 是 `backend/src/main/resources/db/migration/` 中的 Flyway migration；Docker init SQL 不定义应用表，Hibernate 固定使用 `ddl-auto=validate`。Compose local/test/production 基线已创建；test 环境通过独立 project 验证真实 MySQL/MongoDB，业务集成测试覆盖用户密码哈希、资料读写和帖子读写。

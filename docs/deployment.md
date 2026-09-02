@@ -5,6 +5,7 @@
 - production Compose 只包含 backend、MySQL、MongoDB。
 - backend 和数据库只绑定服务器的 `127.0.0.1` 唯一端口。
 - MySQL、MongoDB 的管理连接使用 SSH Tunnel，不直接暴露公网。
+- 本项目公网只使用共享入口的 80/443 和服务器 SSH 22；不对本项目 backend 或数据库增加公网监听，此约束不用于判断服务器上其他项目的端口。
 - 所有生产容器设置资源限制，数据库必须设置最大内存。
 - 部署使用显式存在的 Git release tag；服务器 checkout 指定 tag 后执行 Compose build/up 和健康检查。
 - 项目不引入 Docker Registry；production backend 镜像以 release tag 显式命名，不依赖 `latest`。镜像通过多阶段 Dockerfile 从服务器 checkout 的 tag 源码构建，runtime image 不复用服务器旧 JAR。
@@ -22,6 +23,26 @@
 - 公网 IPv6 路由需要从具备 IPv6 的外部客户端完成最终验证
 
 生产 secret 仅保存在服务器 `/home/ubuntu/.config/engineering-acceptance/production.env`，权限必须为 `600`，其内容不进入 Git 或部署日志。
+
+## 当前生产版本
+
+生产 backend 当前仍为 `v1.0.10`：使用旧 auth contract，不支持 `DELETE /api/posts/{id}`，也不返回 `authorNickname`。`feat/product-hardening` 中的 bearer auth、删除权限和昵称 enrichment 已实现并通过自动测试，但尚未 tag、release 或部署，不能标记为 production verified。
+
+## 数据库管理
+
+数据库宿主端口只绑定 loopback，管理时通过 SSH Tunnel 转发到开发机，并使用官方客户端；命令中的端口、主机和用户均为占位值：
+
+```bash
+# MySQL
+ssh -L <local-mysql-port>:127.0.0.1:<server-mysql-loopback-port> ubuntu@<server>
+mysql -h 127.0.0.1 -P <local-mysql-port> -u <mysql-user> -p <database>
+
+# MongoDB
+ssh -L <local-mongo-port>:127.0.0.1:<server-mongo-loopback-port> ubuntu@<server>
+mongosh 'mongodb://127.0.0.1:<local-mongo-port>/<database>' --username <mongo-user> --authenticationDatabase <auth-database>
+```
+
+密码、private key 和 production env 不写入命令示例、仓库或日志；服务器上不安装第三方数据库 GUI。当前 production MongoDB 应用连接仍使用 root credential、backend runtime container 仍以 root 用户运行，二者是新后端正式发布前的 least-privilege 待办。数据库 restore 尚未经过隔离演练，不以 restart persistence 代替恢复验证。
 
 ## Authentication rollout
 

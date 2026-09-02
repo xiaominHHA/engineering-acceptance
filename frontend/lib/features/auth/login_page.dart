@@ -96,14 +96,16 @@ class _LoginPageState extends State<LoginPage> {
                                   TextFormField(
                                     controller: username,
                                     focusNode: usernameFocus,
+                                    keyboardType: TextInputType.text,
                                     autocorrect: false,
                                     enableSuggestions: false,
                                     autofillHints: const [
                                       AutofillHints.username,
                                     ],
                                     textInputAction: TextInputAction.next,
-                                    onFieldSubmitted: (_) =>
-                                        passwordFocus.requestFocus(),
+                                    onFieldSubmitted: (_) => registering
+                                        ? nicknameFocus.requestFocus()
+                                        : passwordFocus.requestFocus(),
                                     decoration: const InputDecoration(
                                       labelText: '用户名',
                                       prefixIcon: Icon(Icons.person_outline),
@@ -117,6 +119,31 @@ class _LoginPageState extends State<LoginPage> {
                                       return null;
                                     },
                                   ),
+                                  if (registering) ...[
+                                    const SizedBox(height: 16),
+                                    TextFormField(
+                                      controller: nickname,
+                                      focusNode: nicknameFocus,
+                                      keyboardType: TextInputType.name,
+                                      autocorrect: true,
+                                      enableSuggestions: true,
+                                      textInputAction: TextInputAction.next,
+                                      onFieldSubmitted: (_) =>
+                                          passwordFocus.requestFocus(),
+                                      decoration: const InputDecoration(
+                                        labelText: '昵称',
+                                        prefixIcon: Icon(Icons.badge_outlined),
+                                      ),
+                                      validator: (value) {
+                                        final text = value?.trim() ?? '';
+                                        if (text.isEmpty) return '昵称不能为空';
+                                        if (text.length > 100) {
+                                          return '昵称不能超过 100 位';
+                                        }
+                                        return null;
+                                      },
+                                    ),
+                                  ],
                                   const SizedBox(height: 16),
                                   TextFormField(
                                     controller: password,
@@ -129,12 +156,8 @@ class _LoginPageState extends State<LoginPage> {
                                           ? AutofillHints.newPassword
                                           : AutofillHints.password,
                                     ],
-                                    textInputAction: registering
-                                        ? TextInputAction.next
-                                        : TextInputAction.done,
-                                    onFieldSubmitted: (_) => registering
-                                        ? nicknameFocus.requestFocus()
-                                        : submit(),
+                                    textInputAction: TextInputAction.done,
+                                    onFieldSubmitted: (_) => submit(),
                                     decoration: InputDecoration(
                                       labelText: '密码',
                                       helperText: registering
@@ -169,27 +192,6 @@ class _LoginPageState extends State<LoginPage> {
                                       return null;
                                     },
                                   ),
-                                  if (registering) ...[
-                                    const SizedBox(height: 16),
-                                    TextFormField(
-                                      controller: nickname,
-                                      focusNode: nicknameFocus,
-                                      textInputAction: TextInputAction.done,
-                                      onFieldSubmitted: (_) => submit(),
-                                      decoration: const InputDecoration(
-                                        labelText: '昵称',
-                                        prefixIcon: Icon(Icons.badge_outlined),
-                                      ),
-                                      validator: (value) {
-                                        final text = value?.trim() ?? '';
-                                        if (text.isEmpty) return '昵称不能为空';
-                                        if (text.length > 100) {
-                                          return '昵称不能超过 100 位';
-                                        }
-                                        return null;
-                                      },
-                                    ),
-                                  ],
                                   if (widget.viewModel.errorMessage
                                       case final message?) ...[
                                     const SizedBox(height: 16),

@@ -36,7 +36,9 @@
 
 ## 当前状态
 
-工程基线包含最小用户/个人信息与论坛闭环、短期 bearer token 身份边界、安全会话恢复、作者昵称和自有帖子删除、GitHub Actions 质量门禁、release 部署及共享 Nginx 接入。服务器地址、域名、端口、部署目录和共享 Nginx 拓扑已确认；HTTPS/TLS 切换仍以共享基础设施证书就绪为前置条件。
+**Repository HEAD：** `feat/product-hardening` 已实现短期 bearer token、安全会话恢复、自有帖子删除、作者昵称 enrichment 及对应测试；这些变更尚未创建正式 release tag 或部署到生产。
+
+**Current production：** 服务器仍运行 backend `v1.0.10`，使用旧 auth contract，不支持 DELETE post，也不返回 `authorNickname`。过渡客户端保持旧后端发帖兼容，但新后端仍只信任 authenticated principal。HTTPS/TLS 切换以共享基础设施证书就绪为前置条件。
 
 MySQL 保存用户账号及个人资料；MongoDB 保存论坛帖子。MySQL schema 在所有环境中只由 Flyway 版本化 migration 管理，Hibernate 只负责校验。local Compose 发布三个本地回环服务，test Compose 使用临时隔离数据库。production Compose 包含 backend、MySQL、MongoDB，三者宿主端口均只绑定 `127.0.0.1`；MySQL/MongoDB 的 loopback 端口用于 SSH Tunnel 管理，公网业务流量通过共享 `campus-nginx` 进入 backend，本项目不额外暴露 backend 或数据库公网端口。
 
@@ -50,4 +52,5 @@ Git 工作流为 `main`（发布）、`develop`（集成）和短生命周期 `f
 - [开发](docs/development.md)
 - [测试](docs/testing.md)
 - [部署](docs/deployment.md)
+- [实现、真机与生产状态](docs/status.md)
 - [AI/Codex 开发规范](AGENTS.md)

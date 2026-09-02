@@ -86,6 +86,49 @@ void main() {
     expect(find.text('密码长度 8～72 位'), findsOneWidget);
   });
 
+  testWidgets('register form keeps text fields before the secure keyboard', (
+    tester,
+  ) async {
+    await pumpLoginPage(tester, FakeAuthRepository());
+    await switchToRegister(tester);
+
+    expect(find.byType(TextFormField), findsNWidgets(3));
+    expect(
+      tester.getTopLeft(find.text('用户名')).dy,
+      lessThan(tester.getTopLeft(find.text('昵称')).dy),
+    );
+    expect(
+      tester.getTopLeft(find.text('昵称')).dy,
+      lessThan(tester.getTopLeft(find.text('密码')).dy),
+    );
+
+    final fields = tester
+        .widgetList<EditableText>(find.byType(EditableText))
+        .toList();
+
+    final usernameField = fields[0];
+    expect(usernameField.keyboardType, TextInputType.text);
+    expect(usernameField.autocorrect, isFalse);
+    expect(usernameField.enableSuggestions, isFalse);
+    expect(usernameField.autofillHints, contains(AutofillHints.username));
+    expect(usernameField.textInputAction, TextInputAction.next);
+
+    final nicknameField = fields[1];
+    expect(nicknameField.keyboardType, TextInputType.name);
+    expect(nicknameField.autocorrect, isTrue);
+    expect(nicknameField.enableSuggestions, isTrue);
+    expect(nicknameField.obscureText, isFalse);
+    expect(nicknameField.autofillHints, isNull);
+    expect(nicknameField.textInputAction, TextInputAction.next);
+
+    final passwordField = fields[2];
+    expect(passwordField.obscureText, isTrue);
+    expect(passwordField.autocorrect, isFalse);
+    expect(passwordField.enableSuggestions, isFalse);
+    expect(passwordField.autofillHints, contains(AutofillHints.newPassword));
+    expect(passwordField.textInputAction, TextInputAction.done);
+  });
+
   testWidgets('short registration password is rejected without request', (
     tester,
   ) async {
