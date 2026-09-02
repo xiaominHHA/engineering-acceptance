@@ -27,9 +27,19 @@ flutter analyze --fatal-warnings --fatal-infos
 flutter test
 ```
 
-如需 debug APK，可执行 `flutter build apk --debug`。验收正式 release APK 由根目录 `./build.sh` 构建，输出到 `dist/frontend/app-release.apk`，并由 `build.sh` 注入 production `API_BASE_URL`。
+如需 debug APK，可执行 `flutter build apk --debug`。正式 release APK 由根目录 `./build.sh` 构建到 `dist/frontend/engineering-acceptance-app-<version>.apk`，并注入 production `API_BASE_URL`、release version 和 Git commit。
 
 未传 `--dart-define` 时，Flutter 开发配置默认使用 Android Emulator 的 `http://10.0.2.2:18080`。根目录 `./build.sh` 会为 release APK 明确注入 `http://wm7023.campusmeow.com`；需要构建其他目标时可执行 `API_BASE_URL=http://example.test ./build.sh` 覆盖。release Android network security config 仅允许生产域名使用明文 HTTP，debug 资源单独保留本地开发所需的明文访问。
+
+正式 Android 签名使用仓库外的稳定 keystore，不允许回退到 debug key。推荐在 `$HOME/.config/engineering-acceptance/android-signing.properties` 使用 Android 官方 `key.properties` 的四个字段 `storeFile`、`storePassword`、`keyAlias`、`keyPassword`，并将 keystore 和 properties 权限设为 `600`。也可通过同名的 `ANDROID_KEYSTORE_PATH`、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD` 环境变量注入。构建命令为：
+
+```bash
+chmod 600 "$HOME/.config/engineering-acceptance/android-release.jks"
+chmod 600 "$HOME/.config/engineering-acceptance/android-signing.properties"
+./build.sh
+```
+
+密码不写入仓库、命令参数或日志。CI 使用加密 secrets 恢复临时 keystore。可用 Android SDK 的 `apksigner verify --verbose --print-certs <apk>` 验证签名和证书 SHA-256 fingerprint；release 配置缺失时构建会明确失败。
 
 Spring Boot 骨架通过官方 `https://start.spring.io/starter.zip` 创建，参数为 Maven、Java 21、Jar、group/package `com.campusmeow.acceptance`、artifact/name `engineering-acceptance-backend`，以及 Web、Validation、Actuator、JPA、MySQL、MongoDB 依赖。
 
@@ -38,3 +48,5 @@ Spring Boot 骨架通过官方 `https://start.spring.io/starter.zip` 创建，�
 根目录统一脚本已实现：`lint.sh` 执行静态检查，`test.sh` 执行隔离 Docker 集成测试，`build.sh` 输出 `dist/` 中的 APK/JAR，`check.sh` 串行执行前三者，`deploy.sh` 只部署显式 release tag。Docker Compose 配置位于 `infra/compose/`。
 
 fresh local volume 启动时由 backend 执行 Flyway migration，再由 Hibernate 校验 schema。existing local volume 如果出现 schema drift，应先审计并显式处理；不得永久启用 `baseline-on-migrate`，也不得通过删除 production 数据解决 migration 问题。
+
+本地和测试环境使用明确标记为非生产的 token signing key。production 必须通过服务器 secret 文件提供至少 32 字节的独立随机 `APP_AUTH_SIGNING_KEY`；token 默认有效期为 30 分钟，App 重启后重新登录，不持久化凭证。

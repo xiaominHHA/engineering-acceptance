@@ -148,7 +148,7 @@ MongoDB 只负责论坛文档数据，例如帖子 ID、作者用户 ID、标题
 
 只生成：
 
-- `dist/frontend/app-release.apk`；
+- `dist/frontend/engineering-acceptance-app-<version>.apk`；
 - `dist/backend/<artifactId>-<version>.jar`。
 
 不负责 Docker image、部署、Git tag 或 push。

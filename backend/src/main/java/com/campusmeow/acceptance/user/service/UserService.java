@@ -1,10 +1,13 @@
 package com.campusmeow.acceptance.user.service;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
+import org.hibernate.exception.ConstraintViolationException;
+import org.hibernate.exception.ConstraintViolationException.ConstraintKind;
 
+import com.campusmeow.acceptance.common.error.BusinessException;
+import com.campusmeow.acceptance.common.error.BusinessException.Code;
 import com.campusmeow.acceptance.user.dto.LoginRequest;
 import com.campusmeow.acceptance.user.dto.RegisterRequest;
 import com.campusmeow.acceptance.user.dto.UserResponse;
@@ -24,20 +27,27 @@ public class UserService {
 
     public UserResponse register(RegisterRequest request) {
         if (repository.existsByUsername(request.username())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "username already exists");
+            throw new BusinessException(Code.USERNAME_EXISTS, "Username already exists");
         }
         User user = new User();
         user.setUsername(request.username());
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setNickname(request.nickname());
-        return UserResponse.from(repository.save(user));
+        try {
+            return UserResponse.from(repository.saveAndFlush(user));
+        } catch (DataIntegrityViolationException exception) {
+            if (isUsernameUniqueViolation(exception)) {
+                throw new BusinessException(Code.USERNAME_EXISTS, "Username already exists");
+            }
+            throw exception;
+        }
     }
 
     public UserResponse login(LoginRequest request) {
         User user = repository.findByUsername(request.username())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "invalid credentials"));
+                .orElseThrow(() -> new BusinessException(Code.INVALID_CREDENTIALS, "Invalid credentials"));
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "invalid credentials");
+            throw new BusinessException(Code.INVALID_CREDENTIALS, "Invalid credentials");
         }
         return UserResponse.from(user);
     }
@@ -57,6 +67,28 @@ public class UserService {
 
     private User find(Long id) {
         return repository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "user not found"));
+                .orElseThrow(() -> new BusinessException(Code.USER_NOT_FOUND, "User not found"));
+    }
+
+    private static boolean isUsernameUniqueViolation(DataIntegrityViolationException exception) {
+        Throwable cause = exception;
+        while (cause != null) {
+            if (cause instanceof ConstraintViolationException violation
+                    && violation.getKind() == ConstraintKind.UNIQUE
+                    && isUsernameConstraint(violation.getConstraintName())) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
+    }
+
+    private static boolean isUsernameConstraint(String constraintName) {
+        if (constraintName == null) {
+            return false;
+        }
+        int qualifier = constraintName.lastIndexOf('.');
+        String unqualifiedName = constraintName.substring(qualifier + 1);
+        return "username".equalsIgnoreCase(unqualifiedName);
     }
 }

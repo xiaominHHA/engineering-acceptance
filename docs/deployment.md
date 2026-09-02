@@ -8,6 +8,7 @@
 - 所有生产容器设置资源限制，数据库必须设置最大内存。
 - 部署使用显式存在的 Git release tag；服务器 checkout 指定 tag 后执行 Compose build/up 和健康检查。
 - 项目不引入 Docker Registry；production backend 镜像以 release tag 显式命名，不依赖 `latest`。镜像通过多阶段 Dockerfile 从服务器 checkout 的 tag 源码构建，runtime image 不复用服务器旧 JAR。
+- Git annotated tag 是 release identity 的唯一来源；deploy 将去掉 `v` 的版本和准确 commit/build time 传入 Maven 与 Docker，镜像包含 OCI version/revision/created labels，Actuator `/actuator/info` 只公开 build name/version/time/commit。
 - MySQL schema 只由 backend 内随 release 发布的 Flyway migration 管理；生产使用 `baseline-on-migrate=false`，Hibernate 使用 `ddl-auto=validate`。涉及 MySQL schema migration 的生产发布，在执行 `deploy.sh` 前，发布流程必须先完成本项目 MySQL 的逻辑备份；`deploy.sh` 本身不自动执行数据库备份。部署不删除 production volume，也不使用 Docker init SQL 修改已有生产 schema。
 - 本项目 Nginx server block 以 `infra/nginx/backend.conf.template` 维护，并接入共享 `campus-nginx`；当前模板提供已确认域名的 HTTP 反代配置。项目不独占共享 Nginx 或服务器的 80/443，HTTPS/TLS 后续按服务器负责人方案处理。
 - `deploy.sh <release-tag>` 在本地工作树干净且服务器变量齐全时，令远端 checkout 指定 tag，执行 production Compose build/up 并检查 Actuator；缺少信息时安全拒绝执行。
@@ -21,3 +22,11 @@
 - 公网 IPv6 路由需要从具备 IPv6 的外部客户端完成最终验证
 
 生产 secret 仅保存在服务器 `/home/ubuntu/.config/engineering-acceptance/production.env`，权限必须为 `600`，其内容不进入 Git 或部署日志。
+
+## Authentication rollout
+
+新客户端可识别旧后端的扁平 User 响应，因此最小 rollout 顺序是先分发过渡 APK 并确认安装，再为 production secret 增加独立 `APP_AUTH_SIGNING_KEY`，最后部署启用认证的新后端。旧 APK 不理解新的 AuthResponse，也不发送 bearer token；新后端上线后，其资料写入和发帖会返回 401。该 breaking change 必须在切换前明确通知，不能永久保留匿名写接口。
+
+## HTTPS migration prerequisite
+
+当前共享入口尚未确认 TLS，代码阶段不修改共享 Nginx，也不提前产出无法访问现网的 HTTPS APK。正式迁移顺序固定为：负责人完成证书和共享入口 → 使用 curl/浏览器验证域名、证书链和有效期 → 部署兼容 HTTPS 的 backend → 将 `build.sh` 默认 API URL 改为 `https://wm7023.campusmeow.com` → 删除 main/release network-security 中生产域名的 cleartext 例外 → 使用稳定 keystore 构建 APK → 真机验证完整流程。debug/integration test 仍通过 debug 专用配置访问 localhost/`10.0.2.2` HTTP。

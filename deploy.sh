@@ -188,6 +188,10 @@ git diff --quiet && git diff --cached --quiet || { echo 'remote checkout has tra
 git fetch --tags origin
 git checkout --detach "$tag"
 [[ "$(git describe --tags --exact-match)" == "$tag" ]] || { echo 'remote checkout does not match requested tag' >&2; exit 2; }
+RELEASE_VERSION=${tag#v}
+GIT_COMMIT=$(git rev-parse HEAD)
+BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+export RELEASE_VERSION GIT_COMMIT BUILD_TIME
 
 docker network inspect "$edge_network" >/dev/null 2>&1 || docker network create "$edge_network" >/dev/null
 RELEASE_IMAGE_TAG="$tag" docker compose --env-file "$env_file" -p "$project" \

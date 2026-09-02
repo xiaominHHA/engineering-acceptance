@@ -20,10 +20,10 @@ public class PostService {
         return repository.findAll().stream().map(PostResponse::from).toList();
     }
 
-    public PostResponse create(PostRequest request) {
+    public PostResponse create(Long authorUserId, PostRequest request) {
         Instant now = Instant.now();
         Post post = new Post();
-        post.setAuthorUserId(request.authorUserId());
+        post.setAuthorUserId(authorUserId);
         post.setTitle(request.title());
         post.setContent(request.content());
         post.setCreatedAt(now);

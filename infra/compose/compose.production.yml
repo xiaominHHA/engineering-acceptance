@@ -5,6 +5,10 @@ services:
       context: ../../backend
       dockerfile: Dockerfile
       target: runtime
+      args:
+        RELEASE_VERSION: ${RELEASE_VERSION:?set release version}
+        GIT_COMMIT: ${GIT_COMMIT:?set release commit}
+        BUILD_TIME: ${BUILD_TIME:?set build time}
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:?set production profile}
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:?set database}
@@ -12,6 +16,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:?set password}
       SPRING_DATA_MONGODB_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME:?set root user}:${MONGO_INITDB_ROOT_PASSWORD:?set root password}@mongo:27017/${MONGO_DATABASE:?set database}?authSource=admin
       SPRING_MONGODB_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME:?set root user}:${MONGO_INITDB_ROOT_PASSWORD:?set root password}@mongo:27017/${MONGO_DATABASE:?set database}?authSource=admin
+      APP_AUTH_SIGNING_KEY: ${APP_AUTH_SIGNING_KEY:?set auth signing key}
+      APP_AUTH_TOKEN_TTL: ${APP_AUTH_TOKEN_TTL:-PT30M}
     ports:
       - "127.0.0.1:${BACKEND_HOST_PORT:?server-assigned loopback port}:8080"
     networks:

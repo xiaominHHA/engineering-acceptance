@@ -36,13 +36,13 @@
 
 ## 当前状态
 
-发布工程已完成：最小用户/个人信息与论坛闭环、GitHub Actions 质量门禁、release 部署和共享 Nginx 接入均已落盘。服务器地址、域名、端口、部署目录和共享 Nginx 拓扑已确认；HTTPS/TLS 仍按负责人方案处理。
+工程基线包含最小用户/个人信息与论坛闭环、短期 bearer token 身份边界、GitHub Actions 质量门禁、release 部署和共享 Nginx 接入。服务器地址、域名、端口、部署目录和共享 Nginx 拓扑已确认；HTTPS/TLS 切换仍以共享基础设施证书就绪为前置条件。
 
 MySQL 保存用户账号及个人资料；MongoDB 保存论坛帖子。MySQL schema 在所有环境中只由 Flyway 版本化 migration 管理，Hibernate 只负责校验。local Compose 发布三个本地回环服务，test Compose 使用临时隔离数据库。production Compose 包含 backend、MySQL、MongoDB，三者宿主端口均只绑定 `127.0.0.1`；MySQL/MongoDB 的 loopback 端口用于 SSH Tunnel 管理，公网业务流量通过共享 `campus-nginx` 进入 backend，本项目不额外暴露 backend 或数据库公网端口。
 
-本地 demo 可直接使用仓库中的 `infra/env/local.env.example`：执行 `docker compose --env-file infra/env/local.env.example -f infra/compose/compose.local.yml up -d --build`。质量门禁依次使用 `./lint.sh`、`./test.sh`、`./build.sh` 或统一执行 `./check.sh`。`./build.sh` 生成的 release APK 默认连接 `http://wm7023.campusmeow.com`，可通过 `API_BASE_URL` 环境变量覆盖。
+本地 demo 可直接使用仓库中的 `infra/env/local.env.example`：执行 `docker compose --env-file infra/env/local.env.example -f infra/compose/compose.local.yml up -d --build`。质量门禁依次使用 `./lint.sh`、`./test.sh`、`./build.sh` 或统一执行 `./check.sh`。正式 APK 必须使用仓库外的稳定 keystore；配置见 [本地开发](docs/development.md)。TLS 尚未就绪期间，`./build.sh` 默认连接当前 HTTP 生产域名；证书验证通过后按 [部署文档](docs/deployment.md) 切换为 HTTPS并移除 release cleartext 例外。
 
-Git 工作流为 `main`（发布）、`develop`（集成）和短生命周期 `feat/*`/`release/*` 分支。生产发布使用不可变的 annotated tag，服务器通过只读 Deploy Key checkout 指定 tag。
+Git 工作流为 `main`（发布）、`develop`（集成）和短生命周期 `feat/*`/`release/*` 分支。生产发布使用不可变的 annotated tag，tag 是 release 版本的唯一来源：同一版本进入 Android versionName/versionCode、Maven/JAR、Docker tag/OCI labels 和 CI artifact 名，产物同时记录 commit SHA 和构建时间。
 
 ## 文档
 

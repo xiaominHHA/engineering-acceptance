@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
 
+import 'core/network/api_client.dart';
+import 'core/theme/app_theme.dart';
+import 'features/auth/auth_repository.dart';
+import 'features/auth/login_page.dart';
+import 'features/auth/login_view_model.dart';
+import 'features/forum/forum_page.dart';
+import 'features/forum/forum_view_model.dart';
+import 'features/forum/post_repository.dart';
+import 'features/profile/profile_page.dart';
+import 'features/profile/profile_view_model.dart';
+import 'features/profile/user_repository.dart';
 import 'models/user.dart';
-import 'pages/forum_page.dart';
-import 'pages/login_page.dart';
-import 'pages/profile_page.dart';
-import 'services/api_service.dart';
 
 void main() => runApp(const MyApp());
 
@@ -15,19 +22,66 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  final api = ApiService();
+  late final ApiClient apiClient;
+  late final LoginViewModel loginViewModel;
+  late final UserRepository userRepository;
+  late final PostRepository postRepository;
+  ProfileViewModel? profileViewModel;
+  ForumViewModel? forumViewModel;
   User? user;
+
+  @override
+  void initState() {
+    super.initState();
+    apiClient = ApiClient();
+    loginViewModel = LoginViewModel(HttpAuthRepository(apiClient));
+    userRepository = HttpUserRepository(apiClient);
+    postRepository = HttpPostRepository(apiClient);
+  }
+
+  void login(User value) {
+    profileViewModel?.dispose();
+    forumViewModel?.dispose();
+    setState(() {
+      user = value;
+      profileViewModel = ProfileViewModel(userRepository, value);
+      forumViewModel = ForumViewModel(postRepository);
+    });
+  }
+
+  void logout({bool sessionExpired = false}) {
+    profileViewModel?.dispose();
+    forumViewModel?.dispose();
+    profileViewModel = null;
+    forumViewModel = null;
+    apiClient.clearSession();
+    setState(() => user = null);
+    if (sessionExpired) loginViewModel.showSessionExpired();
+  }
+
+  @override
+  void dispose() {
+    loginViewModel.dispose();
+    profileViewModel?.dispose();
+    forumViewModel?.dispose();
+    apiClient.close();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'Engineering Acceptance',
-    theme: ThemeData(colorScheme: .fromSeed(seedColor: Colors.indigo)),
+    debugShowCheckedModeBanner: false,
+    theme: AppTheme.light,
     home: user == null
-        ? LoginPage(api: api, onLogin: (value) => setState(() => user = value))
+        ? LoginPage(viewModel: loginViewModel, onLogin: login)
         : HomePage(
-            api: api,
-            user: user!,
+            profileViewModel: profileViewModel!,
+            forumViewModel: forumViewModel!,
             onUpdate: (value) => setState(() => user = value),
-            onLogout: () => setState(() => user = null),
+            currentUserId: user!.id,
+            onLogout: () => logout(),
+            onSessionExpired: () => logout(sessionExpired: true),
           ),
   );
 }
@@ -35,30 +89,66 @@ class _MyAppState extends State<MyApp> {
 class HomePage extends StatefulWidget {
   const HomePage({
     super.key,
-    required this.api,
-    required this.user,
+    required this.profileViewModel,
+    required this.forumViewModel,
+    required this.currentUserId,
     required this.onUpdate,
     required this.onLogout,
+    required this.onSessionExpired,
   });
-  final ApiService api;
-  final User user;
+  final ProfileViewModel profileViewModel;
+  final ForumViewModel forumViewModel;
+  final int currentUserId;
   final ValueChanged<User> onUpdate;
   final VoidCallback onLogout;
+  final VoidCallback onSessionExpired;
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
   int index = 0;
+  bool handlingSessionExpiry = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.profileViewModel.addListener(_handleSessionExpiry);
+    widget.forumViewModel.addListener(_handleSessionExpiry);
+  }
+
+  void _handleSessionExpiry() {
+    if (handlingSessionExpiry ||
+        (!widget.profileViewModel.sessionExpired &&
+            !widget.forumViewModel.sessionExpired)) {
+      return;
+    }
+    handlingSessionExpiry = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onSessionExpired();
+    });
+  }
+
+  @override
+  void dispose() {
+    widget.profileViewModel.removeListener(_handleSessionExpiry);
+    widget.forumViewModel.removeListener(_handleSessionExpiry);
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = [
       ProfilePage(
-        api: widget.api,
-        user: widget.user,
+        key: const ValueKey('profile'),
+        viewModel: widget.profileViewModel,
         onUpdate: widget.onUpdate,
       ),
-      ForumPage(api: widget.api, user: widget.user),
+      ForumPage(
+        key: const ValueKey('forum'),
+        viewModel: widget.forumViewModel,
+        currentUserId: widget.currentUserId,
+      ),
     ];
     return Scaffold(
       appBar: AppBar(
@@ -67,10 +157,11 @@ class _HomePageState extends State<HomePage> {
           IconButton(
             onPressed: widget.onLogout,
             icon: const Icon(Icons.logout),
+            tooltip: '退出登录',
           ),
         ],
       ),
-      body: pages[index],
+      body: IndexedStack(index: index, children: pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: index,
         onDestinationSelected: (value) => setState(() => index = value),

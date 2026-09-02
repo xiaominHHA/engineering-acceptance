@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 import com.campusmeow.acceptance.forum.dto.PostRequest;
 import com.campusmeow.acceptance.forum.dto.PostResponse;
@@ -25,5 +27,8 @@ public class PostController {
     public List<PostResponse> list() { return service.list(); }
 
     @PostMapping
-    public PostResponse create(@Valid @RequestBody PostRequest request) { return service.create(request); }
+    public PostResponse create(@Valid @RequestBody PostRequest request,
+            @AuthenticationPrincipal Jwt principal) {
+        return service.create(Long.valueOf(principal.getSubject()), request);
+    }
 }
