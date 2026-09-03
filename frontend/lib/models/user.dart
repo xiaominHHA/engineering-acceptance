@@ -21,4 +21,13 @@ class User {
     school: json['school'] as String?,
     className: json['className'] as String?,
   );
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'username': username,
+    'nickname': nickname,
+    'birthday': birthday,
+    'school': school,
+    'className': className,
+  };
 }

@@ -69,7 +69,7 @@ Flutter 保持轻客户端：Page/View 负责展示与输入；Service/Repositor
 
 MySQL 只负责结构化、核心用户数据，例如账号、密码哈希、昵称、生日、学校、班级、创建/更新时间。
 
-MongoDB 只负责论坛文档数据，例如帖子 ID、作者用户 ID、标题、内容、创建/更新时间。MongoDB 只保存关联所需的用户 ID，不复制整份用户资料。
+MongoDB 只负责论坛文档数据，包括帖子、评论和点赞关系。MongoDB 只保存关联所需的用户 ID，不复制整份用户资料；展示昵称从 MySQL 用户数据批量读取，避免 N+1。
 
 ## 5. AI / Codex 工作流
 
@@ -92,6 +92,10 @@ MongoDB 只负责论坛文档数据，例如帖子 ID、作者用户 ID、标题
 - 不隐藏错误或吞掉底层命令输出；
 - 不通过删除/跳过测试或降低规则让检查通过；
 - 配置或架构变化必须同步更新文档。
+- 新增认证、签名、迁移、发布等工程机制前，优先查阅官方文档、官方 sample 或成熟开源实现，复用其职责边界，不照搬其项目规模；
+- 只有能够指出具体失败场景，并说明现有 Git、版本、类型、事务、数据库约束或普通测试为何不能防止时，才新增 wrapper、gate、baseline、hash system 或抽象层；
+- 局部修改先运行直接相关的检查；完整门禁保留在阶段交付、跨系统变更和正式发布边界，不反复运行昂贵检查证明同一件事；
+- AI 生成的实现必须能够解释放置位置、调用方向、数据归属、失败行为和所选机制的必要性。
 
 完成任务前必须：
 
@@ -126,6 +130,8 @@ MongoDB 只负责论坛文档数据，例如帖子 ID、作者用户 ID、标题
 
 所有 Shell 脚本必须使用 Bash 和 `set -Eeuo pipefail`，从自身位置解析仓库根目录，失败返回非零退出码，不静默安装依赖，不做宽泛清理，正确引用变量，并通过 ShellCheck。
 
+项目 harness 以 WSL Ubuntu 中的 Bash/`sh` 为正式运行环境，不创建 PowerShell 版本的同义脚本；Windows 命令只可作为开发者本地辅助。
+
 ### `lint.sh`
 
 只做静态质量检查，不运行测试或生成正式产物。必须覆盖：
@@ -148,7 +154,7 @@ MongoDB 只负责论坛文档数据，例如帖子 ID、作者用户 ID、标题
 
 只生成：
 
-- `dist/frontend/app-release.apk`；
+- `dist/frontend/engineering-acceptance-app-<version>.apk`；
 - `dist/backend/<artifactId>-<version>.jar`。
 
 不负责 Docker image、部署、Git tag 或 push。
@@ -183,11 +189,15 @@ Test：每次创建新数据库容器和 volumes；数据库不发布宿主端�
 
 Production：运行 backend、mysql、mongodb；共享 `campus-nginx` 通过 `wm7023-edge` 和唯一 alias `wm7023-backend` 反向代理 backend，MySQL/MongoDB 不加入 edge network。backend 只绑定分配的 loopback 宿主端口；MySQL/MongoDB 只绑定 `127.0.0.1` 的唯一端口供 SSH Tunnel，数据库不得暴露公网。backend、MySQL、MongoDB 的已确认内存上限分别为 `512m`、`384m`、`256m`；使用独立 production volumes；秘密来自服务器环境；设置日志轮转；local/test 不得引用 production project 或 volumes。
 
+生产 backend 使用专用非 root 容器用户。MongoDB root credential 仅用于管理；应用必须使用只对目标 database 拥有 `readWrite` 的独立 credential，existing volume 的用户初始化不得假设 `docker-entrypoint-initdb.d` 会重新执行。
+
 ## 9. Secret 与安全规范
 
 不得提交 `.env`、私钥、SSH key、TLS 私钥/证书密钥、真实数据库密码、token、AccessKey/SecretKey、生产连接串或生产数据库备份。只允许提交 `.example` 配置文件。
 
 日志不得输出密码、token、私钥或完整敏感个人信息。生产数据库管理必须通过 SSH Tunnel 或负责人批准的安全方式，不直接开放公网端口。
+
+生产数据库管理优先使用官方 `mysql`、`mongosh` 等客户端；不得在服务器安装来源不明的第三方数据库 GUI 或小众管理工具。
 
 ## 10. CI 规范
 
