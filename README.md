@@ -4,7 +4,7 @@
 
 ## 技术栈
 
-- Flutter 3.47.1 / Dart 3.13.1
+- Flutter 3.47.1 / Dart 3.13.1（Android + Web）
 - Spring Boot 4.1.1 / Java 21 / Maven 3.9.16（通过 Maven Wrapper 3.3.4）
 - MySQL
 - MongoDB
@@ -36,13 +36,15 @@
 
 ## 当前状态
 
-**Repository HEAD：** `feat/product-hardening` 已实现短期 bearer token、安全会话恢复，以及文字社区 V1 的帖子详情、发布/删除、点赞、一级回复评论、分页和作者昵称；这些变更尚未创建正式 release tag 或部署到生产。
+**Current release：** `v1.1.0`，包含短期 bearer token、安全会话恢复，以及文字社区 V1 的帖子详情、发布/删除、点赞、一级回复评论、分页和作者昵称。
 
-**Current production：** 服务器仍运行 backend `v1.0.10`，使用旧 auth contract，只支持基础帖子读写。新社区 API 和 secured backend 尚未上线；bearer token 正式经过公网前，必须先完成 HTTPS 验证。
+**Current integration branch：** `develop` 已包含 Flutter Web 官方 scaffolding、跨平台 API 配置及临时 Web preview 部署设施。
+
+**Current server backend：** 当前运行 build commit `614830ba79a66943940985206a3fd5ffe17c3704`，bearer authentication 和完整 Forum V1 API 已通过实际 API smoke。Web preview 使用项目专属 Caddy gateway 和 Cloudflare Quick Tunnel 提供临时 HTTPS same-origin 入口，不需要 backend CORS；共享 `campus-nginx` 不参与该 preview。Quick Tunnel 不替代长期 TLS production ingress。
 
 MySQL 保存用户账号及个人资料；MongoDB 保存论坛帖子。MySQL schema 在所有环境中只由 Flyway 版本化 migration 管理，Hibernate 只负责校验。local Compose 发布三个本地回环服务，test Compose 使用临时隔离数据库。production Compose 包含 backend、MySQL、MongoDB，三者宿主端口均只绑定 `127.0.0.1`；MySQL/MongoDB 的 loopback 端口用于 SSH Tunnel 管理，公网业务流量通过共享 `campus-nginx` 进入 backend，本项目不额外暴露 backend 或数据库公网端口。
 
-本地 demo 可直接使用仓库中的 `infra/env/local.env.example`：执行 `docker compose --env-file infra/env/local.env.example -f infra/compose/compose.local.yml up -d --build`。质量门禁依次使用 `./lint.sh`、`./test.sh`、`./build.sh` 或统一执行 `./check.sh`。正式 APK 必须使用仓库外的稳定 keystore；配置见 [本地开发](docs/development.md)。TLS 尚未就绪期间，`./build.sh` 默认连接当前 HTTP 生产域名；证书验证通过后按 [部署文档](docs/deployment.md) 切换为 HTTPS并移除 release cleartext 例外。
+本地 demo 可直接使用仓库中的 `infra/env/local.env.example`：执行 `docker compose --env-file infra/env/local.env.example -f infra/compose/compose.local.yml up -d --build`。质量门禁依次使用 `./lint.sh`、`./test.sh`、`./build.sh` 或统一执行 `./check.sh`。`build.sh` 生成 APK、JAR 和 same-origin Web bundle；正式 APK 必须使用仓库外的稳定 keystore。临时 Web preview 使用项目专属 gateway + HTTPS tunnel，共享 `campus-nginx` 不参与且 Cloudflare Quick Tunnel URL 不作为永久入口。
 
 Git 工作流为 `main`（发布）、`develop`（集成）和短生命周期 `feat/*`/`release/*` 分支。生产发布使用不可变的 annotated tag，tag 是 release 版本的唯一来源：同一版本进入 Android versionName/versionCode、Maven/JAR、Docker tag/OCI labels 和 CI artifact 名，产物同时记录 commit SHA 和构建时间。
 

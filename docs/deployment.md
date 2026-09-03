@@ -26,7 +26,7 @@
 
 ## 当前生产版本
 
-生产 backend 当前仍为 `v1.0.10`：使用旧 auth contract，只提供基础帖子读写。`feat/product-hardening` 中的 bearer auth、完整 Forum V1 API、删除权限和昵称 enrichment 已实现并通过自动测试，但尚未 tag、release 或部署，不能标记为 production verified。
+当前 server backend 运行 build commit `614830ba79a66943940985206a3fd5ffe17c3704`，bearer auth、完整 Forum V1 API、删除权限和昵称 enrichment 已完成实际 API smoke。仓库现有正式 release tag 为不可变的 `v1.1.0`；当前长期 production ingress 仍为 HTTP，临时 Web preview 的 HTTPS Tunnel 不等同于永久 TLS 上线。
 
 ## 数据库管理
 
@@ -46,8 +46,12 @@ mongosh 'mongodb://127.0.0.1:<local-mongo-port>/<database>' --username <mongo-us
 
 ## Authentication rollout
 
-新客户端可识别旧后端的扁平 User 响应，因此最小 rollout 顺序是先分发过渡 APK 并确认安装，再为 production secret 增加独立 `APP_AUTH_SIGNING_KEY`，最后部署启用认证的新后端。旧 APK 不理解新的 AuthResponse，也不发送 bearer token；新后端上线后，其资料写入和发帖会返回 401。该 breaking change 必须在切换前明确通知，不能永久保留匿名写接口。
+Secured backend 已启用，受保护接口以 bearer principal 为唯一身份来源。旧 APK 不理解新的 AuthResponse，也不发送 bearer token，因此其资料写入和发帖会返回 401；应使用 `v1.1.0` 或更新客户端，不能为旧客户端永久保留匿名写接口。
 
 ## HTTPS migration prerequisite
 
 正式迁移顺序固定为：复用共享服务器既有证书管理方式完成 TLS → 验证域名、证书链和有效期及 HTTP 跳转 → 将 `build.sh` 默认 URL 切到 HTTPS并移除 release cleartext 例外 → 使用稳定 keystore 构建并安装 HTTPS APK → 最后才部署 secured backend。debug/integration test 仍通过 debug 专用配置访问 localhost/`10.0.2.2` HTTP。
+
+## 临时 Flutter Web preview
+
+Web demo 使用 `infra/compose/compose.web-preview.yml` 启动项目专属 Caddy gateway：静态文件与 `/api/*`、`/actuator/*` 共用一个 origin，gateway 仅绑定 `127.0.0.1:18024` 并通过 `wm7023-edge` 访问 `wm7023-backend:8080`。Cloudflare Quick Tunnel 为该 loopback gateway 提供临时 HTTPS URL，因此无需 backend CORS；随机 URL 不提交 Git，也不作为永久 production ingress。此 preview 不读取或修改共享 `campus-nginx` 配置。
