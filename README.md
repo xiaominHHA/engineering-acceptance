@@ -36,9 +36,11 @@
 
 ## 当前状态
 
-**Repository baseline：** `v1.1.0` 已包含短期 bearer token、安全会话恢复，以及文字社区 V1 的帖子详情、发布/删除、点赞、一级回复评论、分页和作者昵称。Flutter Web 在 `feat/flutter-web` 中使用官方 Web scaffolding，并通过项目专属 Caddy gateway 与 Cloudflare Quick Tunnel 提供临时 HTTPS preview。
+**Current release：** `v1.1.0`，包含短期 bearer token、安全会话恢复，以及文字社区 V1 的帖子详情、发布/删除、点赞、一级回复评论、分页和作者昵称。
 
-**Current server backend：** 当前运行 build commit `614830ba79a66943940985206a3fd5ffe17c3704`，完整 Forum V1 API 已可用。Web preview 是临时验证入口，不替代正式域名或永久 production ingress。
+**Current integration branch：** `develop` 已包含 Flutter Web 官方 scaffolding、跨平台 API 配置及临时 Web preview 部署设施。
+
+**Current server backend：** 当前运行 build commit `614830ba79a66943940985206a3fd5ffe17c3704`，bearer authentication 和完整 Forum V1 API 已通过实际 API smoke。Web preview 使用项目专属 Caddy gateway 和 Cloudflare Quick Tunnel 提供临时 HTTPS same-origin 入口，不需要 backend CORS；共享 `campus-nginx` 不参与该 preview。Quick Tunnel 不替代长期 TLS production ingress。
 
 MySQL 保存用户账号及个人资料；MongoDB 保存论坛帖子。MySQL schema 在所有环境中只由 Flyway 版本化 migration 管理，Hibernate 只负责校验。local Compose 发布三个本地回环服务，test Compose 使用临时隔离数据库。production Compose 包含 backend、MySQL、MongoDB，三者宿主端口均只绑定 `127.0.0.1`；MySQL/MongoDB 的 loopback 端口用于 SSH Tunnel 管理，公网业务流量通过共享 `campus-nginx` 进入 backend，本项目不额外暴露 backend 或数据库公网端口。
 

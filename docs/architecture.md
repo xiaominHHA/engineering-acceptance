@@ -12,6 +12,7 @@
 ## 当前实现
 
 - `frontend/` 由 Flutter 3.47.1 的 `flutter create` 创建，包含 Android 与官方 Web scaffolding。Auth、Profile、Forum 按 feature 组织，依赖方向固定为 Page → ChangeNotifier ViewModel → Repository → ApiClient；页面不直接处理 HTTP status，ApiClient 不包含业务模型或 UI 文案。
+- Web 未显式注入 `API_BASE_URL` 时使用 `Uri.base.origin`，使静态页面和 `/api` 保持同源；Android 继续使用构建期 `API_BASE_URL`，debug 默认访问 emulator host。
 - Flutter project name 为 `engineering_acceptance_app`，Android applicationId 为 `com.campusmeow.acceptance.app`。
 - `backend/` 由官方 Spring Initializr 创建，使用 Spring Boot 4.1.1、Java 21 和 Maven Wrapper。
 - 后端依赖包含 Web MVC、Validation、Actuator、Spring Security Resource Server、JPA、MySQL Driver、MongoDB、Flyway 和测试支持。
@@ -25,3 +26,11 @@
 - rollout 期间 Flutter 发帖请求仍携带旧 `v1.0.10` 所需的 `authorUserId`；新后端兼容接收但不使用该字段授权或决定作者，实际作者始终来自 authenticated principal。旧后端退役后应删除这一临时请求字段。
 
 MySQL schema 的唯一 owner 是 `backend/src/main/resources/db/migration/` 中的 Flyway migration；Docker init SQL 不定义应用表，Hibernate 固定使用 `ddl-auto=validate`。Forum Mongo 索引由职责单一的 initializer 显式确保，不开启全局 auto-index。Compose test 通过独立 project 验证真实 MySQL/MongoDB。
+
+## 基础设施目录
+
+- `infra/compose/`：local、test、production、production-smoke 和隔离的 web-preview Compose。
+- `infra/nginx/`：既有共享 production ingress 的本项目 server block 模板。
+- `infra/web/`：项目专属 Web preview gateway 配置；不修改或替代共享 `campus-nginx`。
+- `infra/production/`：production 数据库用户等初始化辅助文件。
+- `infra/test/`：真实数据库集成测试所需的确定性 fixture。
