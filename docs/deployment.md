@@ -8,7 +8,7 @@
 - 本项目公网只使用共享入口的 80/443 和服务器 SSH 22；不对本项目 backend 或数据库增加公网监听，此约束不用于判断服务器上其他项目的端口。
 - 所有生产容器设置资源限制，数据库必须设置最大内存。
 - 部署使用显式存在的 Git release tag；服务器 checkout 指定 tag 后执行 Compose build/up 和健康检查。
-- 项目不引入 Docker Registry；production backend 镜像以 release tag 显式命名，不依赖 `latest`。镜像通过多阶段 Dockerfile 从服务器 checkout 的 tag 源码构建，runtime image 不复用服务器旧 JAR。
+- 项目不引入 Docker Registry；production backend 镜像以 release tag 显式命名，不依赖 `latest`。镜像通过多阶段 Dockerfile 从服务器 checkout 的 tag 源码构建，runtime image 使用专用非 root 用户运行且不复用服务器旧 JAR。
 - Git annotated tag 是 release identity 的唯一来源；deploy 将去掉 `v` 的版本和准确 commit/build time 传入 Maven 与 Docker，镜像包含 OCI version/revision/created labels，Actuator `/actuator/info` 只公开 build name/version/time/commit。
 - MySQL schema 只由 backend 内随 release 发布的 Flyway migration 管理；生产使用 `baseline-on-migrate=false`，Hibernate 使用 `ddl-auto=validate`。涉及 MySQL schema migration 的生产发布，在执行 `deploy.sh` 前，发布流程必须先完成本项目 MySQL 的逻辑备份；`deploy.sh` 本身不自动执行数据库备份。部署不删除 production volume，也不使用 Docker init SQL 修改已有生产 schema。
 - 本项目 Nginx server block 以 `infra/nginx/backend.conf.template` 维护，并接入共享 `campus-nginx`；当前模板提供已确认域名的 HTTP 反代配置。项目不独占共享 Nginx 或服务器的 80/443，HTTPS/TLS 后续按服务器负责人方案处理。
@@ -26,7 +26,7 @@
 
 ## 当前生产版本
 
-生产 backend 当前仍为 `v1.0.10`：使用旧 auth contract，不支持 `DELETE /api/posts/{id}`，也不返回 `authorNickname`。`feat/product-hardening` 中的 bearer auth、删除权限和昵称 enrichment 已实现并通过自动测试，但尚未 tag、release 或部署，不能标记为 production verified。
+生产 backend 当前仍为 `v1.0.10`：使用旧 auth contract，只提供基础帖子读写。`feat/product-hardening` 中的 bearer auth、完整 Forum V1 API、删除权限和昵称 enrichment 已实现并通过自动测试，但尚未 tag、release 或部署，不能标记为 production verified。
 
 ## 数据库管理
 
@@ -42,7 +42,7 @@ ssh -L <local-mongo-port>:127.0.0.1:<server-mongo-loopback-port> ubuntu@<server>
 mongosh 'mongodb://127.0.0.1:<local-mongo-port>/<database>' --username <mongo-user> --authenticationDatabase <auth-database>
 ```
 
-密码、private key 和 production env 不写入命令示例、仓库或日志；服务器上不安装第三方数据库 GUI。当前 production MongoDB 应用连接仍使用 root credential、backend runtime container 仍以 root 用户运行，二者是新后端正式发布前的 least-privilege 待办。数据库 restore 尚未经过隔离演练，不以 restart persistence 代替恢复验证。
+密码、private key 和 production env 不写入命令示例、仓库或日志；服务器上不安装第三方数据库 GUI。新 production 配置要求 `MONGO_APP_USERNAME`/`MONGO_APP_PASSWORD`，应用用户只拥有目标 database 的 `readWrite`；root 仅用于管理和部署时通过官方 `mongosh` 幂等创建或校正该用户。existing volume 不依赖 entrypoint init 重跑，fresh deploy 同样先建立应用用户再启动 backend。数据库 restore 尚未经过隔离演练，不以 restart persistence 代替恢复验证。
 
 ## Authentication rollout
 
@@ -50,4 +50,4 @@ mongosh 'mongodb://127.0.0.1:<local-mongo-port>/<database>' --username <mongo-us
 
 ## HTTPS migration prerequisite
 
-当前共享入口尚未确认 TLS，代码阶段不修改共享 Nginx，也不提前产出无法访问现网的 HTTPS APK。正式迁移顺序固定为：负责人完成证书和共享入口 → 使用 curl/浏览器验证域名、证书链和有效期 → 部署兼容 HTTPS 的 backend → 将 `build.sh` 默认 API URL 改为 `https://wm7023.campusmeow.com` → 删除 main/release network-security 中生产域名的 cleartext 例外 → 使用稳定 keystore 构建 APK → 真机验证完整流程。debug/integration test 仍通过 debug 专用配置访问 localhost/`10.0.2.2` HTTP。
+正式迁移顺序固定为：复用共享服务器既有证书管理方式完成 TLS → 验证域名、证书链和有效期及 HTTP 跳转 → 将 `build.sh` 默认 URL 切到 HTTPS并移除 release cleartext 例外 → 使用稳定 keystore 构建并安装 HTTPS APK → 最后才部署 secured backend。debug/integration test 仍通过 debug 专用配置访问 localhost/`10.0.2.2` HTTP。

@@ -20,7 +20,9 @@ LABEL org.opencontainers.image.title="engineering-acceptance-backend" \
       org.opencontainers.image.revision="$GIT_COMMIT" \
       org.opencontainers.image.created="$BUILD_TIME"
 WORKDIR /app
-COPY --from=build /workspace/target/application.jar app.jar
+RUN groupadd --system app && useradd --system --gid app --home-dir /nonexistent --shell /usr/sbin/nologin app
+COPY --from=build --chown=app:app /workspace/target/application.jar app.jar
+USER app
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
 

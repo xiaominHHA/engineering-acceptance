@@ -14,8 +14,8 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:?set database}
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:?set user}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:?set password}
-      SPRING_DATA_MONGODB_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME:?set root user}:${MONGO_INITDB_ROOT_PASSWORD:?set root password}@mongo:27017/${MONGO_DATABASE:?set database}?authSource=admin
-      SPRING_MONGODB_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME:?set root user}:${MONGO_INITDB_ROOT_PASSWORD:?set root password}@mongo:27017/${MONGO_DATABASE:?set database}?authSource=admin
+      SPRING_DATA_MONGODB_URI: mongodb://${MONGO_APP_USERNAME:?set app user}:${MONGO_APP_PASSWORD:?set app password}@mongo:27017/${MONGO_DATABASE:?set database}?authSource=${MONGO_DATABASE:?set database}
+      SPRING_MONGODB_URI: mongodb://${MONGO_APP_USERNAME:?set app user}:${MONGO_APP_PASSWORD:?set app password}@mongo:27017/${MONGO_DATABASE:?set database}?authSource=${MONGO_DATABASE:?set database}
       APP_AUTH_SIGNING_KEY: ${APP_AUTH_SIGNING_KEY:?set auth signing key}
       APP_AUTH_TOKEN_TTL: ${APP_AUTH_TOKEN_TTL:-PT30M}
     ports:

@@ -7,6 +7,8 @@ public final class BusinessException extends RuntimeException {
         INVALID_CREDENTIALS,
         USER_NOT_FOUND,
         POST_NOT_FOUND,
+        COMMENT_NOT_FOUND,
+        INVALID_REPLY_TARGET,
         ACCESS_DENIED
     }
 

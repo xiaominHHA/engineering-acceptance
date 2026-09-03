@@ -7,13 +7,16 @@ import 'core/theme/app_theme.dart';
 import 'features/auth/auth_repository.dart';
 import 'features/auth/login_page.dart';
 import 'features/auth/login_view_model.dart';
+import 'features/auth/register_view_model.dart';
 import 'features/forum/forum_page.dart';
 import 'features/forum/forum_view_model.dart';
-import 'features/forum/post_repository.dart';
+import 'features/forum/forum_repository.dart';
+import 'features/forum/post_detail_view_model.dart';
 import 'features/profile/profile_page.dart';
 import 'features/profile/profile_view_model.dart';
 import 'features/profile/user_repository.dart';
 import 'models/user.dart';
+import 'models/post.dart';
 
 void main() => runApp(const MyApp());
 
@@ -31,7 +34,7 @@ class _MyAppState extends State<MyApp> {
   late final HttpAuthRepository authRepository;
   late final LoginViewModel loginViewModel;
   late final UserRepository userRepository;
-  late final PostRepository postRepository;
+  late final ForumRepository forumRepository;
   ProfileViewModel? profileViewModel;
   ForumViewModel? forumViewModel;
   User? user;
@@ -47,7 +50,7 @@ class _MyAppState extends State<MyApp> {
     );
     loginViewModel = LoginViewModel(authRepository);
     userRepository = HttpUserRepository(apiClient);
-    postRepository = HttpPostRepository(apiClient);
+    forumRepository = HttpForumRepository(apiClient);
     _restoreSession();
   }
 
@@ -89,7 +92,7 @@ class _MyAppState extends State<MyApp> {
       user = value;
       restoringSession = false;
       profileViewModel = ProfileViewModel(userRepository, value);
-      forumViewModel = ForumViewModel(postRepository);
+      forumViewModel = ForumViewModel(forumRepository);
     });
   }
 
@@ -125,10 +128,16 @@ class _MyAppState extends State<MyApp> {
     home: restoringSession
         ? const Scaffold(body: Center(child: CircularProgressIndicator()))
         : user == null
-        ? LoginPage(viewModel: loginViewModel, onLogin: login)
+        ? LoginPage(
+            viewModel: loginViewModel,
+            createRegisterViewModel: () => RegisterViewModel(authRepository),
+            onLogin: login,
+          )
         : HomePage(
             profileViewModel: profileViewModel!,
             forumViewModel: forumViewModel!,
+            createDetailViewModel: (post) =>
+                PostDetailViewModel(forumRepository, post),
             onUpdate: updateUser,
             currentUserId: user!.id,
             onLogout: logout,
@@ -144,6 +153,7 @@ class HomePage extends StatefulWidget {
     super.key,
     required this.profileViewModel,
     required this.forumViewModel,
+    required this.createDetailViewModel,
     required this.currentUserId,
     required this.onUpdate,
     required this.onLogout,
@@ -151,6 +161,7 @@ class HomePage extends StatefulWidget {
   });
   final ProfileViewModel profileViewModel;
   final ForumViewModel forumViewModel;
+  final PostDetailViewModel Function(Post) createDetailViewModel;
   final int currentUserId;
   final Future<void> Function(User) onUpdate;
   final Future<void> Function() onLogout;
@@ -196,24 +207,18 @@ class _HomePageState extends State<HomePage> {
         key: const ValueKey('profile'),
         viewModel: widget.profileViewModel,
         onUpdate: widget.onUpdate,
+        onLogout: widget.onLogout,
       ),
       ForumPage(
         key: const ValueKey('forum'),
         viewModel: widget.forumViewModel,
         currentUserId: widget.currentUserId,
+        createDetailViewModel: (post) => widget.createDetailViewModel(post),
+        onSessionExpired: widget.onSessionExpired,
       ),
     ];
     return Scaffold(
-      appBar: AppBar(
-        title: Text(index == 0 ? '个人资料' : '论坛'),
-        actions: [
-          IconButton(
-            onPressed: () async => widget.onLogout(),
-            icon: const Icon(Icons.logout),
-            tooltip: '退出登录',
-          ),
-        ],
-      ),
+      appBar: AppBar(title: Text(index == 0 ? '个人资料' : '校园社区')),
       body: IndexedStack(index: index, children: pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: index,

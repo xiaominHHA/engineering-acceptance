@@ -35,6 +35,8 @@ class AppFailure implements Exception {
             'USERNAME_EXISTS' => AppFailureType.usernameExists,
             'USER_NOT_FOUND' => AppFailureType.notFound,
             'POST_NOT_FOUND' => AppFailureType.notFound,
+            'COMMENT_NOT_FOUND' => AppFailureType.notFound,
+            'INVALID_REPLY_TARGET' => AppFailureType.validation,
             'AUTHENTICATION_REQUIRED' ||
             'TOKEN_INVALID_OR_EXPIRED' => AppFailureType.sessionExpired,
             'ACCESS_DENIED' => AppFailureType.forbidden,

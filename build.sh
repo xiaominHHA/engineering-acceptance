@@ -55,9 +55,9 @@ mkdir -p "$DIST_DIR/frontend" "$DIST_DIR/backend"
   --dart-define="API_BASE_URL=$RELEASE_API_BASE_URL" \
   --dart-define="APP_VERSION=$PROJECT_VERSION" \
   --dart-define="GIT_COMMIT=$GIT_COMMIT")
-(cd "$ROOT_DIR/backend" && ./mvnw -q package -DskipTests \
+(cd "$ROOT_DIR/backend" && ./mvnw -q clean package -DskipTests \
   -Drevision="$PROJECT_VERSION" -Dgit.commit="$GIT_COMMIT")
 cp "$flutter_apk" "$DIST_DIR/frontend/$apk_name"
-jar_file=$(find "$ROOT_DIR/backend/target" -maxdepth 1 -type f -name '*.jar' ! -name '*.original' | head -n 1)
-test -n "$jar_file"
+jar_file="$ROOT_DIR/backend/target/engineering-acceptance-backend-$PROJECT_VERSION.jar"
+test -s "$jar_file"
 cp "$jar_file" "$DIST_DIR/backend/$(basename "$jar_file")"

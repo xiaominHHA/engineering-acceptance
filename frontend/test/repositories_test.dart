@@ -4,7 +4,7 @@ import 'package:engineering_acceptance_app/core/error/app_failure.dart';
 import 'package:engineering_acceptance_app/core/network/api_client.dart';
 import 'package:engineering_acceptance_app/core/session/session_storage.dart';
 import 'package:engineering_acceptance_app/features/auth/auth_repository.dart';
-import 'package:engineering_acceptance_app/features/forum/post_repository.dart';
+import 'package:engineering_acceptance_app/features/forum/forum_repository.dart';
 import 'package:engineering_acceptance_app/features/profile/user_repository.dart';
 import 'package:engineering_acceptance_app/models/post.dart';
 import 'package:engineering_acceptance_app/models/user.dart';
@@ -117,12 +117,12 @@ void main() {
       baseUrl: 'http://example.test',
     );
     final authRepository = createAuthRepository(apiClient);
-    final postRepository = HttpPostRepository(apiClient);
+    final postRepository = HttpForumRepository(apiClient);
 
     await authRepository.login('legacy-user', 'password123');
     late final Post post;
     try {
-      post = await postRepository.create('早上好', '吃早餐了吗');
+      post = await postRepository.createPost('早上好', '吃早餐了吗');
     } on AppFailure catch (failure) {
       fail('Unexpected ${failure.type}: ${failure.message}');
     }
@@ -213,13 +213,16 @@ void main() {
       AppFailureType.notFound,
     );
 
-    final postRepository = HttpPostRepository(
+    final postRepository = HttpForumRepository(
       ApiClient(
         client: MockClient((_) async => http.Response('{}', 500)),
         baseUrl: 'http://example.test',
       ),
     );
-    await expectFailure(postRepository.list(), AppFailureType.server);
+    await expectFailure(
+      postRepository.listPosts(page: 0),
+      AppFailureType.server,
+    );
   });
 
   test('new error codes take priority over legacy status fallback', () async {
@@ -299,7 +302,7 @@ void main() {
   test(
     'post repository parses nickname and maps delete compatibility',
     () async {
-      final nicknameRepository = HttpPostRepository(
+      final nicknameRepository = HttpForumRepository(
         ApiClient(
           client: MockClient(
             (_) async => http.Response(
@@ -314,17 +317,20 @@ void main() {
           baseUrl: 'http://example.test',
         ),
       );
-      expect((await nicknameRepository.list()).single.authorNickname, '真实昵称');
+      expect(
+        (await nicknameRepository.listPosts(page: 0)).single.authorNickname,
+        '真实昵称',
+      );
 
       for (final status in [404, 405]) {
-        final legacyRepository = HttpPostRepository(
+        final legacyRepository = HttpForumRepository(
           ApiClient(
             client: MockClient((_) async => http.Response('{}', status)),
             baseUrl: 'http://example.test',
           ),
         );
         await expectLater(
-          legacyRepository.delete('post-1'),
+          legacyRepository.deletePost('post-1'),
           throwsA(
             isA<AppFailure>().having(
               (failure) => failure.type,
@@ -335,7 +341,7 @@ void main() {
         );
       }
 
-      final currentRepository = HttpPostRepository(
+      final currentRepository = HttpForumRepository(
         ApiClient(
           client: MockClient(
             (_) async => http.Response(
@@ -348,7 +354,7 @@ void main() {
         ),
       );
       await expectLater(
-        currentRepository.delete('post-1'),
+        currentRepository.deletePost('post-1'),
         throwsA(
           isA<AppFailure>().having(
             (failure) => failure.type,

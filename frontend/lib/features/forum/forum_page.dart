@@ -2,11 +2,21 @@ import 'package:flutter/material.dart';
 
 import '../../models/post.dart';
 import 'forum_view_model.dart';
+import 'post_detail_page.dart';
+import 'post_detail_view_model.dart';
 
 class ForumPage extends StatefulWidget {
-  const ForumPage({super.key, required this.viewModel, this.currentUserId});
+  const ForumPage({
+    super.key,
+    required this.viewModel,
+    required this.createDetailViewModel,
+    required this.onSessionExpired,
+    this.currentUserId,
+  });
 
   final ForumViewModel viewModel;
+  final PostDetailViewModel Function(Post) createDetailViewModel;
+  final Future<void> Function() onSessionExpired;
   final int? currentUserId;
 
   @override
@@ -14,18 +24,42 @@ class ForumPage extends StatefulWidget {
 }
 
 class _ForumPageState extends State<ForumPage> {
-  final formKey = GlobalKey<FormState>();
   final title = TextEditingController();
   final content = TextEditingController();
+  final formKey = GlobalKey<FormState>();
+  final scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    widget.viewModel.load();
+    scrollController.addListener(_loadMoreIfNeeded);
+    widget.viewModel.loadInitial();
+  }
+
+  void _loadMoreIfNeeded() {
+    if (scrollController.position.extentAfter < 320) {
+      widget.viewModel.loadMore();
+    }
+  }
+
+  Future<void> openDetail(Post post) async {
+    final detailViewModel = widget.createDetailViewModel(post);
+    void syncPostToFeed() => widget.viewModel.mergePost(detailViewModel.post);
+    detailViewModel.addListener(syncPostToFeed);
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => PostDetailPage(
+          viewModel: detailViewModel,
+          currentUserId: widget.currentUserId,
+          onSessionExpired: widget.onSessionExpired,
+        ),
+      ),
+    );
+    detailViewModel.removeListener(syncPostToFeed);
+    detailViewModel.dispose();
   }
 
   Future<void> openComposer() async {
-    widget.viewModel.clearPublishError();
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -52,13 +86,6 @@ class _ForumPageState extends State<ForumPage> {
                     style: Theme.of(context).textTheme.headlineSmall
                         ?.copyWith(fontWeight: FontWeight.w700),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '分享一段值得交流的校园内容',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
                   const SizedBox(height: 20),
                   TextFormField(
                     controller: title,
@@ -78,7 +105,6 @@ class _ForumPageState extends State<ForumPage> {
                     minLines: 4,
                     maxLines: 8,
                     keyboardType: TextInputType.multiline,
-                    textInputAction: TextInputAction.newline,
                     decoration: const InputDecoration(
                       labelText: '内容',
                       alignLabelWithHint: true,
@@ -90,7 +116,7 @@ class _ForumPageState extends State<ForumPage> {
                       return null;
                     },
                   ),
-                  if (widget.viewModel.publishErrorMessage
+                  if (widget.viewModel.actionErrorMessage
                       case final message?) ...[
                     const SizedBox(height: 12),
                     Text(
@@ -129,7 +155,6 @@ class _ForumPageState extends State<ForumPage> {
         !(formKey.currentState?.validate() ?? false)) {
       return;
     }
-    FocusScope.of(sheetContext).unfocus();
     final published = await widget.viewModel.publish(
       title.text.trim(),
       content.text.trim(),
@@ -147,16 +172,16 @@ class _ForumPageState extends State<ForumPage> {
   Future<void> confirmDelete(Post post) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (context) => AlertDialog(
         title: const Text('删除帖子？'),
-        content: const Text('删除后无法恢复。'),
+        content: const Text('帖子及其评论和点赞将一并删除。'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text('取消'),
           ),
           FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
+            onPressed: () => Navigator.pop(context, true),
             child: const Text('删除'),
           ),
         ],
@@ -165,15 +190,20 @@ class _ForumPageState extends State<ForumPage> {
     if (confirmed != true || !mounted) return;
     final deleted = await widget.viewModel.delete(post.id);
     if (!mounted || widget.viewModel.sessionExpired) return;
-    final message = deleted
-        ? '帖子已删除'
-        : widget.viewModel.deleteErrorMessage ?? '删除失败，请稍后重试';
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          deleted
+              ? '帖子已删除'
+              : widget.viewModel.actionErrorMessage ?? '删除失败，请稍后重试',
+        ),
+      ),
+    );
   }
 
   @override
   void dispose() {
+    scrollController.dispose();
     title.dispose();
     content.dispose();
     super.dispose();
@@ -190,7 +220,7 @@ class _ForumPageState extends State<ForumPage> {
     body: AnimatedBuilder(
       animation: widget.viewModel,
       builder: (context, _) => RefreshIndicator(
-        onRefresh: widget.viewModel.load,
+        onRefresh: widget.viewModel.refresh,
         child: _buildFeed(context),
       ),
     ),
@@ -207,7 +237,7 @@ class _ForumPageState extends State<ForumPage> {
           title: '帖子暂时加载失败',
           message: widget.viewModel.loadErrorMessage ?? '请稍后重试',
           action: TextButton.icon(
-            onPressed: widget.viewModel.load,
+            onPressed: widget.viewModel.loadInitial,
             icon: const Icon(Icons.refresh),
             label: const Text('重试'),
           ),
@@ -223,35 +253,49 @@ class _ForumPageState extends State<ForumPage> {
         ),
       );
     }
-
     return ListView.separated(
+      controller: scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
       itemCount:
           widget.viewModel.posts.length +
-          (widget.viewModel.loadErrorMessage == null ? 0 : 1),
+          (widget.viewModel.loadErrorMessage == null ? 0 : 1) +
+          (widget.viewModel.isLoadingMore ? 1 : 0),
       separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         if (widget.viewModel.loadErrorMessage != null && index == 0) {
-          return _RefreshWarning(
-            message: widget.viewModel.loadErrorMessage!,
-            onRetry: widget.viewModel.load,
+          return Card(
+            color: Theme.of(context).colorScheme.errorContainer,
+            child: ListTile(
+              leading: const Icon(Icons.cloud_off_outlined),
+              title: Text(widget.viewModel.loadErrorMessage!),
+              trailing: TextButton(
+                onPressed: widget.viewModel.refresh,
+                child: const Text('重试'),
+              ),
+            ),
           );
         }
         final postIndex =
             index - (widget.viewModel.loadErrorMessage == null ? 0 : 1);
+        if (postIndex == widget.viewModel.posts.length) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+        final post = widget.viewModel.posts[postIndex];
         return _PostCard(
-          post: widget.viewModel.posts[postIndex],
-          isCurrentUser:
-              widget.viewModel.posts[postIndex].authorUserId ==
-              widget.currentUserId,
-          deleting: widget.viewModel.deletingPostIds.contains(
-            widget.viewModel.posts[postIndex].id,
-          ),
-          onDelete:
-              widget.viewModel.posts[postIndex].authorUserId ==
-                  widget.currentUserId
-              ? () => confirmDelete(widget.viewModel.posts[postIndex])
+          post: post,
+          isCurrentUser: post.authorUserId == widget.currentUserId,
+          deleting: widget.viewModel.deletingPostIds.contains(post.id),
+          liking: widget.viewModel.likingPostIds.contains(post.id),
+          onOpen: () => openDetail(post),
+          onLike: () => widget.viewModel.toggleLike(post),
+          onDelete: post.authorUserId == widget.currentUserId
+              ? () => confirmDelete(post)
               : null,
         );
       },
@@ -264,87 +308,112 @@ class _PostCard extends StatelessWidget {
     required this.post,
     required this.isCurrentUser,
     required this.deleting,
+    required this.liking,
+    required this.onOpen,
+    required this.onLike,
     this.onDelete,
   });
-
   final Post post;
   final bool isCurrentUser;
   final bool deleting;
+  final bool liking;
+  final VoidCallback onOpen;
+  final VoidCallback onLike;
   final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 18,
-                child: Icon(
-                  isCurrentUser ? Icons.person : Icons.person_outline,
-                  size: 19,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  post.authorNickname ?? (isCurrentUser ? '我' : '社区用户'),
-                  style: Theme.of(context).textTheme.labelLarge
-                      ?.copyWith(fontWeight: FontWeight.w600),
-                ),
-              ),
-              if (post.createdAt case final createdAt?)
-                Text(
-                  _formatTime(createdAt),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+    child: InkWell(
+      onTap: onOpen,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 18,
+                  child: Icon(
+                    isCurrentUser ? Icons.person : Icons.person_outline,
+                    size: 19,
                   ),
                 ),
-              if (onDelete != null)
-                deleting
-                    ? const Padding(
-                        padding: EdgeInsets.all(12),
-                        child: SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    post.authorNickname ?? (isCurrentUser ? '我' : '社区用户'),
+                    style: Theme.of(context).textTheme.labelLarge
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                if (post.createdAt case final value?)
+                  Text(
+                    formatPostTime(value),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                if (onDelete != null)
+                  deleting
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : PopupMenuButton<String>(
+                          tooltip: '帖子操作',
+                          onSelected: (_) => onDelete!(),
+                          itemBuilder: (_) => const [
+                            PopupMenuItem(value: 'delete', child: Text('删除帖子')),
+                          ],
                         ),
-                      )
-                    : PopupMenuButton<String>(
-                        tooltip: '帖子操作',
-                        onSelected: (_) => onDelete!(),
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(value: 'delete', child: Text('删除帖子')),
-                        ],
-                      ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            post.title,
-            style: Theme.of(context).textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          Text(post.content, style: Theme.of(context).textTheme.bodyLarge),
-        ],
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              post.title,
+              style: Theme.of(context).textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            Text(post.content, maxLines: 4, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                TextButton.icon(
+                  onPressed: liking ? null : onLike,
+                  icon: Icon(
+                    post.likedByCurrentUser
+                        ? Icons.favorite
+                        : Icons.favorite_border,
+                  ),
+                  label: Text('${post.likeCount}'),
+                ),
+                TextButton.icon(
+                  onPressed: onOpen,
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  label: Text('${post.commentCount}'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     ),
   );
+}
 
-  static String _formatTime(DateTime value) {
-    final local = value.toLocal();
-    String two(int number) => number.toString().padLeft(2, '0');
-    return '${local.month}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
-  }
+String formatPostTime(DateTime value) {
+  final local = value.toLocal();
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${local.month}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
 }
 
 class _ScrollableState extends StatelessWidget {
   const _ScrollableState({required this.child});
   final Widget child;
-
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) => ListView(
@@ -352,9 +421,7 @@ class _ScrollableState extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       children: [
         SizedBox(
-          height: (constraints.maxHeight - 48)
-              .clamp(180.0, double.infinity)
-              .toDouble(),
+          height: (constraints.maxHeight - 48).clamp(180.0, double.infinity),
           child: Center(child: child),
         ),
       ],
@@ -373,47 +440,16 @@ class _StateMessage extends StatelessWidget {
   final String title;
   final String message;
   final Widget? action;
-
   @override
   Widget build(BuildContext context) => Column(
     mainAxisSize: MainAxisSize.min,
     children: [
-      Icon(icon, size: 48, color: Theme.of(context).colorScheme.outline),
-      const SizedBox(height: 16),
+      Icon(icon, size: 44, color: Theme.of(context).colorScheme.primary),
+      const SizedBox(height: 12),
       Text(title, style: Theme.of(context).textTheme.titleMedium),
       const SizedBox(height: 6),
-      Text(
-        message,
-        textAlign: TextAlign.center,
-        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-      ),
-      if (action case final value?) ...[const SizedBox(height: 8), value],
+      Text(message, textAlign: TextAlign.center),
+      ?action,
     ],
-  );
-}
-
-class _RefreshWarning extends StatelessWidget {
-  const _RefreshWarning({required this.message, required this.onRetry});
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) => Card(
-    color: Theme.of(context).colorScheme.errorContainer,
-    child: Padding(
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        children: [
-          const Icon(Icons.sync_problem_outlined),
-          const SizedBox(width: 10),
-          Expanded(child: Text('$message，已保留现有帖子')),
-          IconButton(
-            tooltip: '重试刷新',
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
-    ),
   );
 }

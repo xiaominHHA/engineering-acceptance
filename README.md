@@ -36,9 +36,9 @@
 
 ## 当前状态
 
-**Repository HEAD：** `feat/product-hardening` 已实现短期 bearer token、安全会话恢复、自有帖子删除、作者昵称 enrichment 及对应测试；这些变更尚未创建正式 release tag 或部署到生产。
+**Repository HEAD：** `feat/product-hardening` 已实现短期 bearer token、安全会话恢复，以及文字社区 V1 的帖子详情、发布/删除、点赞、一级回复评论、分页和作者昵称；这些变更尚未创建正式 release tag 或部署到生产。
 
-**Current production：** 服务器仍运行 backend `v1.0.10`，使用旧 auth contract，不支持 DELETE post，也不返回 `authorNickname`。过渡客户端保持旧后端发帖兼容，但新后端仍只信任 authenticated principal。HTTPS/TLS 切换以共享基础设施证书就绪为前置条件。
+**Current production：** 服务器仍运行 backend `v1.0.10`，使用旧 auth contract，只支持基础帖子读写。新社区 API 和 secured backend 尚未上线；bearer token 正式经过公网前，必须先完成 HTTPS 验证。
 
 MySQL 保存用户账号及个人资料；MongoDB 保存论坛帖子。MySQL schema 在所有环境中只由 Flyway 版本化 migration 管理，Hibernate 只负责校验。local Compose 发布三个本地回环服务，test Compose 使用临时隔离数据库。production Compose 包含 backend、MySQL、MongoDB，三者宿主端口均只绑定 `127.0.0.1`；MySQL/MongoDB 的 loopback 端口用于 SSH Tunnel 管理，公网业务流量通过共享 `campus-nginx` 进入 backend，本项目不额外暴露 backend 或数据库公网端口。
 

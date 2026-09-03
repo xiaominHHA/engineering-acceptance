@@ -3,6 +3,7 @@ import 'package:engineering_acceptance_app/core/session/session_storage.dart';
 import 'package:engineering_acceptance_app/features/auth/auth_repository.dart';
 import 'package:engineering_acceptance_app/features/auth/login_page.dart';
 import 'package:engineering_acceptance_app/features/auth/login_view_model.dart';
+import 'package:engineering_acceptance_app/features/auth/register_view_model.dart';
 import 'package:engineering_acceptance_app/models/user.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -45,18 +46,24 @@ class FakeAuthRepository implements AuthRepository {
 
 Future<void> pumpLoginPage(
   WidgetTester tester,
-  FakeAuthRepository repository,
-) async {
+  FakeAuthRepository repository, {
+  ValueChanged<User>? onLogin,
+}) async {
   await tester.pumpWidget(
     MaterialApp(
-      home: LoginPage(viewModel: LoginViewModel(repository), onLogin: (_) {}),
+      home: LoginPage(
+        viewModel: LoginViewModel(repository),
+        createRegisterViewModel: () => RegisterViewModel(repository),
+        onLogin: onLogin ?? (_) {},
+      ),
     ),
   );
 }
 
 Future<void> switchToRegister(WidgetTester tester) async {
-  await tester.tap(find.text('第一次使用？创建账号'));
-  await tester.pump();
+  await tester.ensureVisible(find.text('没有账号？创建账号'));
+  await tester.tap(find.text('没有账号？创建账号'));
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -83,7 +90,7 @@ void main() {
     await pumpLoginPage(tester, FakeAuthRepository());
     await switchToRegister(tester);
 
-    expect(find.text('密码长度 8～72 位'), findsOneWidget);
+    expect(find.text('8～72 位'), findsOneWidget);
   });
 
   testWidgets('register form keeps text fields before the secure keyboard', (
@@ -94,7 +101,7 @@ void main() {
 
     expect(find.byType(TextFormField), findsNWidgets(3));
     expect(
-      tester.getTopLeft(find.text('用户名')).dy,
+      tester.getTopLeft(find.text('登录用户名')).dy,
       lessThan(tester.getTopLeft(find.text('昵称')).dy),
     );
     expect(
@@ -110,7 +117,7 @@ void main() {
     expect(usernameField.keyboardType, TextInputType.text);
     expect(usernameField.autocorrect, isFalse);
     expect(usernameField.enableSuggestions, isFalse);
-    expect(usernameField.autofillHints, contains(AutofillHints.username));
+    expect(usernameField.autofillHints, contains(AutofillHints.newUsername));
     expect(usernameField.textInputAction, TextInputAction.next);
 
     final nicknameField = fields[1];
@@ -118,7 +125,7 @@ void main() {
     expect(nicknameField.autocorrect, isTrue);
     expect(nicknameField.enableSuggestions, isTrue);
     expect(nicknameField.obscureText, isFalse);
-    expect(nicknameField.autofillHints, isNull);
+    expect(nicknameField.autofillHints, contains(AutofillHints.nickname));
     expect(nicknameField.textInputAction, TextInputAction.next);
 
     final passwordField = fields[2];
@@ -136,7 +143,7 @@ void main() {
     await pumpLoginPage(tester, repository);
     await switchToRegister(tester);
     await tester.enterText(
-      find.widgetWithText(TextFormField, '用户名'),
+      find.widgetWithText(TextFormField, '登录用户名'),
       'new-user',
     );
     await tester.enterText(find.widgetWithText(TextFormField, '密码'), 'short');
@@ -144,7 +151,7 @@ void main() {
       find.widgetWithText(TextFormField, '昵称'),
       'New User',
     );
-    await tester.tap(find.text('注册并进入'));
+    await tester.tap(find.widgetWithText(FilledButton, '创建账号'));
     await tester.pump();
 
     expect(find.text('密码长度必须为 8～72 位'), findsOneWidget);
@@ -156,10 +163,10 @@ void main() {
   ) async {
     final repository = FakeAuthRepository();
     await pumpLoginPage(tester, repository);
-    await tester.tap(find.text('登录'));
+    await tester.tap(find.widgetWithText(FilledButton, '登录'));
     await tester.pump();
 
-    expect(find.text('用户名不能为空'), findsOneWidget);
+    expect(find.text('登录用户名不能为空'), findsOneWidget);
     expect(find.text('密码不能为空'), findsOneWidget);
     expect(repository.loginCalls, 0);
   });
@@ -168,7 +175,10 @@ void main() {
     final repository = FakeAuthRepository()
       ..loginError = const AppFailure(AppFailureType.invalidCredentials);
     await pumpLoginPage(tester, repository);
-    await tester.enterText(find.widgetWithText(TextFormField, '用户名'), 'tester');
+    await tester.enterText(
+      find.widgetWithText(TextFormField, '登录用户名'),
+      'tester',
+    );
     await tester.enterText(
       find.widgetWithText(TextFormField, '密码'),
       'wrong-password',
@@ -176,7 +186,7 @@ void main() {
     await tester.tap(find.text('登录'));
     await tester.pumpAndSettle();
 
-    expect(find.text('用户名或密码错误'), findsOneWidget);
+    expect(find.text('登录用户名或密码错误'), findsOneWidget);
   });
 
   testWidgets('username conflict shows registration error', (tester) async {
@@ -185,7 +195,7 @@ void main() {
     await pumpLoginPage(tester, repository);
     await switchToRegister(tester);
     await tester.enterText(
-      find.widgetWithText(TextFormField, '用户名'),
+      find.widgetWithText(TextFormField, '登录用户名'),
       'existing',
     );
     await tester.enterText(
@@ -196,10 +206,41 @@ void main() {
       find.widgetWithText(TextFormField, '昵称'),
       'Existing',
     );
-    await tester.tap(find.text('注册并进入'));
+    await tester.tap(find.widgetWithText(FilledButton, '创建账号'));
     await tester.pumpAndSettle();
 
-    expect(find.text('用户名已存在，请更换用户名'), findsOneWidget);
+    expect(find.text('登录用户名已存在，请更换后重试'), findsOneWidget);
+    expect(
+      tester
+          .widget<TextFormField>(find.widgetWithText(TextFormField, '昵称'))
+          .controller
+          ?.text,
+      'Existing',
+    );
+  });
+
+  testWidgets('successful registration returns directly to authenticated app', (
+    tester,
+  ) async {
+    final repository = FakeAuthRepository();
+    User? loggedIn;
+    await pumpLoginPage(tester, repository, onLogin: (user) => loggedIn = user);
+    await switchToRegister(tester);
+    await tester.enterText(
+      find.widgetWithText(TextFormField, '登录用户名'),
+      'new-user',
+    );
+    await tester.enterText(find.widgetWithText(TextFormField, '昵称'), '新同学');
+    await tester.enterText(
+      find.widgetWithText(TextFormField, '密码'),
+      'password123',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, '创建账号'));
+    await tester.pumpAndSettle();
+
+    expect(repository.registerCalls, 1);
+    expect(loggedIn, FakeAuthRepository.user);
+    expect(find.text('欢迎回来'), findsOneWidget);
   });
 
   testWidgets('network and validation errors use different messages', (
@@ -208,7 +249,10 @@ void main() {
     final networkRepository = FakeAuthRepository()
       ..loginError = const AppFailure(AppFailureType.network);
     await pumpLoginPage(tester, networkRepository);
-    await tester.enterText(find.widgetWithText(TextFormField, '用户名'), 'tester');
+    await tester.enterText(
+      find.widgetWithText(TextFormField, '登录用户名'),
+      'tester',
+    );
     await tester.enterText(
       find.widgetWithText(TextFormField, '密码'),
       'password123',
@@ -220,13 +264,16 @@ void main() {
     final validationRepository = FakeAuthRepository()
       ..loginError = const AppFailure(AppFailureType.validation);
     await pumpLoginPage(tester, validationRepository);
-    await tester.enterText(find.widgetWithText(TextFormField, '用户名'), 'tester');
+    await tester.enterText(
+      find.widgetWithText(TextFormField, '登录用户名'),
+      'tester',
+    );
     await tester.enterText(
       find.widgetWithText(TextFormField, '密码'),
       'password123',
     );
     await tester.tap(find.text('登录'));
     await tester.pumpAndSettle();
-    expect(find.text('输入不符合要求，请检查后重试'), findsOneWidget);
+    expect(find.text('请检查登录用户名和密码'), findsOneWidget);
   });
 }

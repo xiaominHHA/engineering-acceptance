@@ -42,6 +42,19 @@ mysql_query() {
     "mysql -N -u root -p\"\$MYSQL_ROOT_PASSWORD\" \"\$MYSQL_DATABASE\" -e \"\$1\"" sh "$sql"
 }
 
+mongo_app_roles() {
+  # Variables in this command intentionally expand inside the Mongo container.
+  # shellcheck disable=SC2016
+  "${COMPOSE[@]}" exec -T mongo sh -c '
+    mongosh --quiet \
+      --username "$MONGO_INITDB_ROOT_USERNAME" \
+      --password "$MONGO_INITDB_ROOT_PASSWORD" \
+      --authenticationDatabase admin \
+      "$MONGO_DATABASE" \
+      --eval '\''const user = db.runCommand({usersInfo: process.env.MONGO_APP_USERNAME}).users[0]; print(EJSON.stringify(user.roles));'\''
+  '
+}
+
 api_request() {
   local method=$1 path=$2 body=${3:-} token=${4:-}
   local -a headers=(--header 'Content-Type: application/json')
@@ -61,6 +74,14 @@ api_request() {
 
 "${COMPOSE[@]}" up -d --build
 wait_for_health
+
+[[ "$("${COMPOSE[@]}" exec -T backend id -u | tr -d '\r')" != 0 ]]
+app_roles=$(mongo_app_roles)
+expected_mongo_database=$(sed -n 's/^MONGO_DATABASE=//p' \
+  "$ROOT_DIR/infra/env/test.env.example")
+[[ "$app_roles" == *'"role":"readWrite"'* ]]
+[[ "$app_roles" == *"\"db\":\"$expected_mongo_database\""* ]]
+[[ "$app_roles" != *'dbAdmin'* && "$app_roles" != *'userAdmin'* && "$app_roles" != *'root'* ]]
 
 build_info=$(api_request GET /actuator/info)
 [[ "$build_info" == *"\"version\":\"$SMOKE_RELEASE_VERSION\""* ]]

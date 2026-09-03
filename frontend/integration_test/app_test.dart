@@ -34,30 +34,32 @@ void main() {
     app.main();
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('第一次使用？创建账号'));
-    await tester.pump();
-    await tester.enterText(field('用户名'), username);
-    await tester.enterText(field('密码'), password);
+    await tapVisible(tester, find.text('没有账号？创建账号'));
+    await tester.pumpAndSettle();
+    await tester.enterText(field('登录用户名'), username);
     await tester.enterText(field('昵称'), nickname);
-    await tapVisible(tester, find.text('注册并进入'));
+    await tester.enterText(field('密码'), password);
+    await tapVisible(tester, find.widgetWithText(FilledButton, '创建账号'));
     await waitFor(tester, find.text('个人资料'));
 
-    await tester.tap(find.byIcon(Icons.logout));
-    await waitFor(tester, find.text('第一次使用？创建账号'));
-    await tester.tap(find.text('第一次使用？创建账号'));
-    await tester.pump();
-    await tester.enterText(field('用户名'), username);
-    await tester.enterText(field('密码'), password);
+    await tapVisible(tester, find.text('退出登录'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '退出'));
+    await waitFor(tester, find.text('没有账号？创建账号'));
+    await tapVisible(tester, find.text('没有账号？创建账号'));
+    await tester.pumpAndSettle();
+    await tester.enterText(field('登录用户名'), username);
     await tester.enterText(field('昵称'), nickname);
-    await tapVisible(tester, find.text('注册并进入'));
-    await waitFor(tester, find.text('用户名已存在，请更换用户名'));
+    await tester.enterText(field('密码'), password);
+    await tapVisible(tester, find.widgetWithText(FilledButton, '创建账号'));
+    await waitFor(tester, find.text('登录用户名已存在，请更换后重试'));
 
-    await tester.tap(find.text('已有账号？返回登录'));
-    await tester.pump();
-    await tester.enterText(field('用户名'), username);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.enterText(field('登录用户名'), username);
     await tester.enterText(field('密码'), 'wrong-password');
     await tapVisible(tester, find.text('登录'));
-    await waitFor(tester, find.text('用户名或密码错误'));
+    await waitFor(tester, find.text('登录用户名或密码错误'));
 
     await tester.enterText(field('密码'), password);
     await tapVisible(tester, find.text('登录'));

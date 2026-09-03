@@ -37,7 +37,7 @@ void main() {
     await tester.pumpWidget(MyApp(sessionStorage: EmptySessionStorage()));
     await tester.pumpAndSettle();
     expect(find.text('登录'), findsOneWidget);
-    expect(find.text('用户名'), findsOneWidget);
+    expect(find.text('登录用户名'), findsOneWidget);
   });
 
   testWidgets('restored bearer session is cleared when profile returns 401', (
@@ -91,7 +91,14 @@ void main() {
     expect(find.text('个人资料'), findsOneWidget);
     expect(find.text('Legacy'), findsWidgets);
 
-    await tester.tap(find.byTooltip('退出登录'));
+    await tester.scrollUntilVisible(
+      find.text('退出登录'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('退出登录'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '退出'));
     await tester.pumpAndSettle();
     expect(find.text('登录'), findsOneWidget);
     expect(storage.value, isNull);

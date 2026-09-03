@@ -8,10 +8,12 @@ class ProfilePage extends StatefulWidget {
     super.key,
     required this.viewModel,
     required this.onUpdate,
+    required this.onLogout,
   });
 
   final ProfileViewModel viewModel;
   final Future<void> Function(User) onUpdate;
+  final Future<void> Function() onLogout;
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -97,6 +99,26 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  Future<void> confirmLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('退出当前账号？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('退出'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) await widget.onLogout();
+  }
+
   void _applyUser(User user) {
     nickname.text = user.nickname;
     school.text = user.school ?? '';
@@ -122,6 +144,21 @@ class _ProfilePageState extends State<ProfilePage> {
         children: [
           _ProfileIdentity(user: widget.viewModel.user),
           const SizedBox(height: 20),
+          _SectionCard(
+            title: '账号信息',
+            icon: Icons.key_outlined,
+            children: [
+              Text('登录用户名：${widget.viewModel.user.username}'),
+              const SizedBox(height: 6),
+              Text(
+                '用于登录，不可在此修改',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
           _SectionCard(
             title: '基本资料',
             icon: Icons.person_outline,
@@ -204,6 +241,12 @@ class _ProfilePageState extends State<ProfilePage> {
                   )
                 : const Icon(Icons.save_outlined),
             label: Text(widget.viewModel.isSaving ? '正在保存' : '保存资料'),
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: widget.viewModel.isSaving ? null : confirmLogout,
+            icon: const Icon(Icons.logout),
+            label: const Text('退出登录'),
           ),
         ],
       ),

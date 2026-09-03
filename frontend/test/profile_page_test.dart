@@ -74,6 +74,7 @@ Future<ProfileViewModel> pumpProfile(
         body: ProfilePage(
           viewModel: viewModel,
           onUpdate: onUpdate ?? (_) async {},
+          onLogout: () async {},
         ),
       ),
     ),

@@ -1,6 +1,7 @@
 package com.campusmeow.acceptance;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -43,7 +45,10 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import com.campusmeow.acceptance.user.entity.User;
 import com.campusmeow.acceptance.user.repository.UserRepository;
 import com.campusmeow.acceptance.forum.document.Post;
+import com.campusmeow.acceptance.forum.document.PostLike;
 import com.campusmeow.acceptance.forum.repository.PostRepository;
+import com.campusmeow.acceptance.forum.repository.CommentRepository;
+import com.campusmeow.acceptance.forum.repository.PostLikeRepository;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -67,6 +72,12 @@ class BusinessIntegrationTests {
 
     @Autowired
     private PostRepository postRepository;
+
+    @Autowired
+    private CommentRepository commentRepository;
+
+    @Autowired
+    private PostLikeRepository postLikeRepository;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -251,6 +262,98 @@ class BusinessIntegrationTests {
     }
 
     @Test
+    void supportsBoundedPaginationDetailAndIdempotentLikes() throws Exception {
+        AuthenticatedUser user = register("forum-like-user", "password123", "Like User");
+        String postId = createPost(user, "Like target", "Like content");
+
+        mockMvc.perform(get("/api/posts").param("page", "0").param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+        mockMvc.perform(get("/api/posts").param("size", "51"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        mockMvc.perform(put("/api/posts/{id}/like", postId))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(authenticated(put("/api/posts/{id}/like", postId), user.token()))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(authenticated(put("/api/posts/{id}/like", postId), user.token()))
+                .andExpect(status().isNoContent());
+        assertThat(postLikeRepository.findByPostIdIn(List.of(postId))).hasSize(1);
+        PostLike duplicate = new PostLike();
+        duplicate.setPostId(postId);
+        duplicate.setUserId(user.userId());
+        duplicate.setCreatedAt(Instant.now());
+        assertThatThrownBy(() -> postLikeRepository.insert(duplicate))
+                .isInstanceOf(DuplicateKeyException.class);
+
+        mockMvc.perform(authenticated(get("/api/posts/{id}", postId), user.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.authorNickname").value("Like User"))
+                .andExpect(jsonPath("$.likeCount").value(1))
+                .andExpect(jsonPath("$.commentCount").value(0))
+                .andExpect(jsonPath("$.likedByCurrentUser").value(true));
+
+        mockMvc.perform(authenticated(delete("/api/posts/{id}/like", postId), user.token()))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(authenticated(delete("/api/posts/{id}/like", postId), user.token()))
+                .andExpect(status().isNoContent());
+        assertThat(postLikeRepository.findByPostIdIn(List.of(postId))).isEmpty();
+    }
+
+    @Test
+    void supportsCommentsRepliesOwnershipAndPostCascadeCleanup() throws Exception {
+        AuthenticatedUser author = register("comment-author", "password123", "Comment Author");
+        AuthenticatedUser other = register("comment-other", "password123", "Comment Other");
+        String postId = createPost(author, "Discuss", "Comment here");
+        String anotherPostId = createPost(author, "Other", "Other post");
+
+        MvcResult commentResult = mockMvc.perform(authenticated(
+                        post("/api/posts/{id}/comments", postId), other.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"First comment\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.authorNickname").value("Comment Other"))
+                .andReturn();
+        String commentId = objectMapper.readTree(commentResult.getResponse().getContentAsByteArray())
+                .path("id").asText();
+
+        mockMvc.perform(authenticated(post("/api/posts/{id}/comments", postId), author.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content":"Reply","replyToCommentId":"%s"}
+                                """.formatted(commentId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.replyToNickname").value("Comment Other"));
+        mockMvc.perform(authenticated(post("/api/posts/{id}/comments", anotherPostId), author.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content":"Wrong post","replyToCommentId":"%s"}
+                                """.formatted(commentId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REPLY_TARGET"));
+
+        mockMvc.perform(get("/api/posts/{id}/comments", postId).param("page", "0").param("size", "30"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2));
+        mockMvc.perform(authenticated(delete("/api/posts/{postId}/comments/{commentId}",
+                        postId, commentId), author.token()))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(authenticated(delete("/api/posts/{postId}/comments/{commentId}",
+                        postId, commentId), other.token()))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(authenticated(put("/api/posts/{id}/like", postId), other.token()))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(authenticated(delete("/api/posts/{id}", postId), author.token()))
+                .andExpect(status().isNoContent());
+        assertThat(commentRepository.findByPostIdIn(List.of(postId))).isEmpty();
+        assertThat(postLikeRepository.findByPostIdIn(List.of(postId))).isEmpty();
+        mockMvc.perform(get("/api/posts/{id}", postId))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void returnsStableBusinessValidationAndBuildInfoContracts() throws Exception {
         AuthenticatedUser user = register("error-contract-user", "password123", "Error Contract User");
 
@@ -345,6 +448,17 @@ class BusinessIntegrationTests {
                 .andReturn();
         JsonNode json = objectMapper.readTree(result.getResponse().getContentAsByteArray());
         return new AuthenticatedUser(json.path("user").path("id").asLong(), json.path("accessToken").asText());
+    }
+
+    private String createPost(AuthenticatedUser user, String title, String content) throws Exception {
+        MvcResult result = mockMvc.perform(authenticated(post("/api/posts"), user.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"%s","content":"%s"}
+                                """.formatted(title, content)))
+                .andExpect(status().isOk())
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsByteArray()).path("id").asText();
     }
 
     private MockHttpServletResponse registerConcurrently(String username, CountDownLatch start) throws Exception {

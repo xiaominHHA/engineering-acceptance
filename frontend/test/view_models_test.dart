@@ -5,7 +5,8 @@ import 'package:engineering_acceptance_app/core/session/session_storage.dart';
 import 'package:engineering_acceptance_app/features/auth/auth_repository.dart';
 import 'package:engineering_acceptance_app/features/auth/login_view_model.dart';
 import 'package:engineering_acceptance_app/features/forum/forum_view_model.dart';
-import 'package:engineering_acceptance_app/features/forum/post_repository.dart';
+import 'package:engineering_acceptance_app/features/forum/forum_repository.dart';
+import 'package:engineering_acceptance_app/features/forum/post_detail_view_model.dart';
 import 'package:engineering_acceptance_app/features/profile/profile_view_model.dart';
 import 'package:engineering_acceptance_app/features/profile/user_repository.dart';
 import 'package:engineering_acceptance_app/main.dart';
@@ -59,7 +60,7 @@ class FakeUserRepository implements UserRepository {
   }
 }
 
-class FakePostRepository implements PostRepository {
+class FakePostRepository implements ForumRepository {
   List<Post> listedPosts = const [];
   Object? listError;
   Object? createError;
@@ -69,41 +70,48 @@ class FakePostRepository implements PostRepository {
   int deleteCalls = 0;
 
   @override
-  Future<void> delete(String postId) async {
+  Future<void> deletePost(String postId) async {
     deleteCalls++;
     if (deleteError case final error?) throw error;
   }
 
   @override
-  Future<List<Post>> list() async {
+  Future<List<Post>> listPosts({required int page, int size = 20}) async {
     if (listError case final error?) throw error;
     return listedPosts;
   }
 
   @override
-  Future<Post> create(String title, String content) {
+  Future<Post> createPost(String title, String content) {
     createCalls++;
     if (createError case final error?) return Future.error(error);
     return createCompleter.future;
   }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class ControlledPostRepository implements PostRepository {
+class ControlledPostRepository implements ForumRepository {
   final initialList = Completer<List<Post>>();
   final createCompleter = Completer<Post>();
   int listCalls = 0;
 
   @override
-  Future<void> delete(String postId) async {}
+  Future<void> deletePost(String postId) async {}
 
   @override
-  Future<List<Post>> list() {
+  Future<List<Post>> listPosts({required int page, int size = 20}) {
     listCalls++;
     return initialList.future;
   }
 
   @override
-  Future<Post> create(String title, String content) => createCompleter.future;
+  Future<Post> createPost(String title, String content) =>
+      createCompleter.future;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 void main() {
@@ -139,7 +147,7 @@ void main() {
     );
     expect(await login, isNull);
     expect(viewModel.isSubmitting, isFalse);
-    expect(viewModel.errorMessage, '用户名或密码错误');
+    expect(viewModel.errorMessage, '登录用户名或密码错误');
   });
 
   test('async completion after view model disposal does not notify', () async {
@@ -188,6 +196,8 @@ void main() {
           onSessionExpired: () async {
             expiryCallbacks++;
           },
+          createDetailViewModel: (post) =>
+              PostDetailViewModel(postRepository, post),
         ),
       ),
     );
@@ -255,7 +265,7 @@ void main() {
       final viewModel = ForumViewModel(repository);
       addTearDown(viewModel.dispose);
       await viewModel.publish('早上好', '吃早餐了吗');
-      return viewModel.publishErrorMessage;
+      return viewModel.actionErrorMessage;
     }
 
     expect(await messageFor({'title': 'must not be blank'}), '标题不符合要求，请检查后重试');
@@ -338,7 +348,7 @@ void main() {
       );
       expect(await viewModel.delete(owned.id), isFalse);
       expect(viewModel.posts, contains(owned));
-      expect(viewModel.deleteErrorMessage, '当前服务器版本暂不支持删除帖子');
+      expect(viewModel.actionErrorMessage, '当前服务器版本暂不支持删除帖子');
 
       repository.deleteError = null;
       expect(await viewModel.delete(owned.id), isTrue);

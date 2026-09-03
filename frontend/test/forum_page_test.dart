@@ -3,7 +3,8 @@ import 'dart:async';
 import 'package:engineering_acceptance_app/core/error/app_failure.dart';
 import 'package:engineering_acceptance_app/features/forum/forum_page.dart';
 import 'package:engineering_acceptance_app/features/forum/forum_view_model.dart';
-import 'package:engineering_acceptance_app/features/forum/post_repository.dart';
+import 'package:engineering_acceptance_app/features/forum/forum_repository.dart';
+import 'package:engineering_acceptance_app/features/forum/post_detail_view_model.dart';
 import 'package:engineering_acceptance_app/models/post.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,7 +23,7 @@ const publishedPost = Post(
   content: '吃早餐了吗',
 );
 
-class QueuePostRepository implements PostRepository {
+class QueuePostRepository implements ForumRepository {
   final listResults = <Object>[];
   Completer<Post>? controlledCreate;
   Object? createError;
@@ -32,7 +33,7 @@ class QueuePostRepository implements PostRepository {
   int deleteCalls = 0;
 
   @override
-  Future<List<Post>> list() async {
+  Future<List<Post>> listPosts({required int page, int size = 20}) async {
     listCalls++;
     final result = listResults.removeAt(0);
     if (result is Future<List<Post>>) return result;
@@ -41,7 +42,7 @@ class QueuePostRepository implements PostRepository {
   }
 
   @override
-  Future<Post> create(String title, String content) async {
+  Future<Post> createPost(String title, String content) async {
     createCalls++;
     if (createError case final value?) throw value;
     final completer = controlledCreate;
@@ -55,10 +56,13 @@ class QueuePostRepository implements PostRepository {
   }
 
   @override
-  Future<void> delete(String postId) async {
+  Future<void> deletePost(String postId) async {
     deleteCalls++;
     if (deleteError case final value?) throw value;
   }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 Future<ForumViewModel> pumpForum(
@@ -82,7 +86,13 @@ Future<ForumViewModel> pumpForum(
         child: child!,
       ),
       home: Scaffold(
-        body: ForumPage(viewModel: viewModel, currentUserId: currentUserId),
+        body: ForumPage(
+          viewModel: viewModel,
+          currentUserId: currentUserId,
+          createDetailViewModel: (post) =>
+              PostDetailViewModel(repository, post),
+          onSessionExpired: () async {},
+        ),
       ),
     ),
   );

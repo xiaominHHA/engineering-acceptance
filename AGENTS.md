@@ -69,7 +69,7 @@ Flutter 保持轻客户端：Page/View 负责展示与输入；Service/Repositor
 
 MySQL 只负责结构化、核心用户数据，例如账号、密码哈希、昵称、生日、学校、班级、创建/更新时间。
 
-MongoDB 只负责论坛文档数据，例如帖子 ID、作者用户 ID、标题、内容、创建/更新时间。MongoDB 只保存关联所需的用户 ID，不复制整份用户资料。
+MongoDB 只负责论坛文档数据，包括帖子、评论和点赞关系。MongoDB 只保存关联所需的用户 ID，不复制整份用户资料；展示昵称从 MySQL 用户数据批量读取，避免 N+1。
 
 ## 5. AI / Codex 工作流
 
@@ -188,6 +188,8 @@ Local：backend、mysql、mongodb 全部通过 Docker 运行；宿主访问只�
 Test：每次创建新数据库容器和 volumes；数据库不发布宿主端口；初始化数据固定可重复；测试结束精确清理本次资源。
 
 Production：运行 backend、mysql、mongodb；共享 `campus-nginx` 通过 `wm7023-edge` 和唯一 alias `wm7023-backend` 反向代理 backend，MySQL/MongoDB 不加入 edge network。backend 只绑定分配的 loopback 宿主端口；MySQL/MongoDB 只绑定 `127.0.0.1` 的唯一端口供 SSH Tunnel，数据库不得暴露公网。backend、MySQL、MongoDB 的已确认内存上限分别为 `512m`、`384m`、`256m`；使用独立 production volumes；秘密来自服务器环境；设置日志轮转；local/test 不得引用 production project 或 volumes。
+
+生产 backend 使用专用非 root 容器用户。MongoDB root credential 仅用于管理；应用必须使用只对目标 database 拥有 `readWrite` 的独立 credential，existing volume 的用户初始化不得假设 `docker-entrypoint-initdb.d` 会重新执行。
 
 ## 9. Secret 与安全规范
 
