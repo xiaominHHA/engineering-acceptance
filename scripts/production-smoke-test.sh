@@ -5,8 +5,11 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 ROOT_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 PROJECT="engineering-acceptance-production-smoke-${BASHPID}-$(date +%s)"
 SMOKE_IMAGE_TAG="smoke-${BASHPID}-$(date +%s)"
+SMOKE_RELEASE_VERSION="0.0.0-smoke.${BASHPID}"
 SMOKE_BACKEND_HOST_PORT=$((30000 + BASHPID % 20000))
-export SMOKE_IMAGE_TAG SMOKE_BACKEND_HOST_PORT
+GIT_COMMIT=$(git -C "$ROOT_DIR" rev-parse HEAD)
+BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+export SMOKE_IMAGE_TAG SMOKE_RELEASE_VERSION SMOKE_BACKEND_HOST_PORT GIT_COMMIT BUILD_TIME
 
 COMPOSE=(docker compose -p "$PROJECT" --env-file "$ROOT_DIR/infra/env/test.env.example"
   -f "$ROOT_DIR/infra/compose/compose.production-smoke.yml")
@@ -39,20 +42,50 @@ mysql_query() {
     "mysql -N -u root -p\"\$MYSQL_ROOT_PASSWORD\" \"\$MYSQL_DATABASE\" -e \"\$1\"" sh "$sql"
 }
 
+mongo_app_roles() {
+  # Variables in this command intentionally expand inside the Mongo container.
+  # shellcheck disable=SC2016
+  "${COMPOSE[@]}" exec -T mongo sh -c '
+    mongosh --quiet \
+      --username "$MONGO_INITDB_ROOT_USERNAME" \
+      --password "$MONGO_INITDB_ROOT_PASSWORD" \
+      --authenticationDatabase admin \
+      "$MONGO_DATABASE" \
+      --eval '\''const user = db.runCommand({usersInfo: process.env.MONGO_APP_USERNAME}).users[0]; print(EJSON.stringify(user.roles));'\''
+  '
+}
+
 api_request() {
-  local method=$1 path=$2 body=${3:-}
+  local method=$1 path=$2 body=${3:-} token=${4:-}
+  local -a headers=(--header 'Content-Type: application/json')
+  if [[ -n "$token" ]]; then
+    headers+=(--header "Authorization: Bearer $token")
+  fi
   if [[ -n "$body" ]]; then
     curl --fail --silent --request "$method" \
-      --header 'Content-Type: application/json' \
+      "${headers[@]}" \
       --data "$body" "http://127.0.0.1:$SMOKE_BACKEND_HOST_PORT$path"
   else
     curl --fail --silent --request "$method" \
+      "${headers[@]}" \
       "http://127.0.0.1:$SMOKE_BACKEND_HOST_PORT$path"
   fi
 }
 
 "${COMPOSE[@]}" up -d --build
 wait_for_health
+
+[[ "$("${COMPOSE[@]}" exec -T backend id -u | tr -d '\r')" != 0 ]]
+app_roles=$(mongo_app_roles)
+expected_mongo_database=$(sed -n 's/^MONGO_DATABASE=//p' \
+  "$ROOT_DIR/infra/env/test.env.example")
+[[ "$app_roles" == *'"role":"readWrite"'* ]]
+[[ "$app_roles" == *"\"db\":\"$expected_mongo_database\""* ]]
+[[ "$app_roles" != *'dbAdmin'* && "$app_roles" != *'userAdmin'* && "$app_roles" != *'root'* ]]
+
+build_info=$(api_request GET /actuator/info)
+[[ "$build_info" == *"\"version\":\"$SMOKE_RELEASE_VERSION\""* ]]
+[[ "$build_info" == *"\"commit\":\"$GIT_COMMIT\""* ]]
 
 migration_before=$(mysql_query \
   "SELECT CONCAT(COUNT(*), ':', COALESCE(SUM(success), 0)) FROM flyway_schema_history WHERE version = '1';")
@@ -61,9 +94,11 @@ migration_before=$(mysql_query \
 
 registration=$(api_request POST /api/auth/register \
   '{"username":"production-smoke-user","password":"password123","nickname":"Production Smoke"}')
-[[ "$registration" != *passwordHash* ]]
-user_id=$(sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p' <<<"$registration")
+[[ "$registration" == *'"tokenType":"Bearer"'* && "$registration" != *passwordHash* ]]
+user_id=$(sed -n 's/.*"user":{"id":\([0-9][0-9]*\).*/\1/p' <<<"$registration")
+access_token=$(sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p' <<<"$registration")
 [[ -n "$user_id" ]]
+[[ -n "$access_token" ]]
 
 password_hash=$(mysql_query \
   "SELECT password_hash FROM users WHERE username = 'production-smoke-user';")
@@ -71,18 +106,19 @@ password_hash=$(mysql_query \
 
 login=$(api_request POST /api/auth/login \
   '{"username":"production-smoke-user","password":"password123"}')
-[[ "$login" == *"\"id\":$user_id"* && "$login" != *passwordHash* ]]
+[[ "$login" == *"\"user\":{\"id\":$user_id"* && "$login" != *passwordHash* ]]
 
-profile=$(api_request GET "/api/users/$user_id")
+profile=$(api_request GET "/api/users/$user_id" '' "$access_token")
 [[ "$profile" == *'"nickname":"Production Smoke"'* && "$profile" != *passwordHash* ]]
 
 updated=$(api_request PUT "/api/users/$user_id" \
-  '{"nickname":"Updated Production Smoke","birthday":"2001-02-03","school":"Campus Meow","className":"Class 1"}')
+  '{"nickname":"Updated Production Smoke","birthday":"2001-02-03","school":"Campus Meow","className":"Class 1"}' \
+  "$access_token")
 [[ "$updated" == *'"nickname":"Updated Production Smoke"'* && "$updated" != *passwordHash* ]]
 
 created_post=$(api_request POST /api/posts \
-  "{\"authorUserId\":$user_id,\"title\":\"Production smoke post\",\"content\":\"Persistent MongoDB smoke data\"}")
-[[ "$created_post" == *'"title":"Production smoke post"'* ]]
+  '{"title":"Production smoke post","content":"Persistent MongoDB smoke data"}' "$access_token")
+[[ "$created_post" == *"\"authorUserId\":$user_id"* && "$created_post" == *'"title":"Production smoke post"'* ]]
 posts=$(api_request GET /api/posts)
 [[ "$posts" == *'"title":"Production smoke post"'* ]]
 
@@ -96,7 +132,7 @@ migration_after=$(mysql_query \
 
 login_after_restart=$(api_request POST /api/auth/login \
   '{"username":"production-smoke-user","password":"password123"}')
-[[ "$login_after_restart" == *"\"id\":$user_id"* && "$login_after_restart" != *passwordHash* ]]
+[[ "$login_after_restart" == *"\"user\":{\"id\":$user_id"* && "$login_after_restart" != *passwordHash* ]]
 posts_after_restart=$(api_request GET /api/posts)
 [[ "$posts_after_restart" == *'"title":"Production smoke post"'* ]]
 

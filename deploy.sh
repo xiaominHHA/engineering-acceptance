@@ -163,6 +163,9 @@ assert_expected_setting MONGO_HOST_PORT 27023
 assert_expected_setting BACKEND_MEMORY_LIMIT 512m
 assert_expected_setting MYSQL_MEMORY_LIMIT 384m
 assert_expected_setting MONGO_MEMORY_LIMIT 256m
+[[ -n "$(env_value MONGO_APP_USERNAME)" ]] || { echo 'MONGO_APP_USERNAME is required' >&2; exit 2; }
+[[ -n "$(env_value MONGO_APP_PASSWORD)" ]] || { echo 'MONGO_APP_PASSWORD is required' >&2; exit 2; }
+[[ -n "$(env_value APP_AUTH_SIGNING_KEY)" ]] || { echo 'APP_AUTH_SIGNING_KEY is required' >&2; exit 2; }
 assert_port_available 18023
 assert_port_available 13323
 assert_port_available 27023
@@ -188,6 +191,10 @@ git diff --quiet && git diff --cached --quiet || { echo 'remote checkout has tra
 git fetch --tags origin
 git checkout --detach "$tag"
 [[ "$(git describe --tags --exact-match)" == "$tag" ]] || { echo 'remote checkout does not match requested tag' >&2; exit 2; }
+RELEASE_VERSION=${tag#v}
+GIT_COMMIT=$(git rev-parse HEAD)
+BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+export RELEASE_VERSION GIT_COMMIT BUILD_TIME
 
 docker network inspect "$edge_network" >/dev/null 2>&1 || docker network create "$edge_network" >/dev/null
 RELEASE_IMAGE_TAG="$tag" docker compose --env-file "$env_file" -p "$project" \
@@ -195,7 +202,30 @@ RELEASE_IMAGE_TAG="$tag" docker compose --env-file "$env_file" -p "$project" \
 RELEASE_IMAGE_TAG="$tag" docker compose --env-file "$env_file" -p "$project" \
   -f infra/compose/compose.production.yml build backend
 RELEASE_IMAGE_TAG="$tag" docker compose --env-file "$env_file" -p "$project" \
-  -f infra/compose/compose.production.yml up -d
+  -f infra/compose/compose.production.yml up -d mysql mongo
+
+mongo_id=$(RELEASE_IMAGE_TAG="$tag" docker compose --env-file "$env_file" -p "$project" \
+  -f infra/compose/compose.production.yml ps -q mongo)
+for attempt in $(seq 1 30); do
+  [[ "$(docker inspect --format '{{.State.Health.Status}}' "$mongo_id")" == healthy ]] && break
+  [[ "$attempt" -lt 30 ]] && sleep 2
+done
+[[ "$(docker inspect --format '{{.State.Health.Status}}' "$mongo_id")" == healthy ]] || {
+  echo 'production MongoDB did not become healthy' >&2
+  exit 1
+}
+docker exec -i \
+  -e MONGO_DATABASE="$(env_value MONGO_DATABASE)" \
+  -e MONGO_APP_USERNAME="$(env_value MONGO_APP_USERNAME)" \
+  -e MONGO_APP_PASSWORD="$(env_value MONGO_APP_PASSWORD)" \
+  -e MONGO_ADMIN_USERNAME="$(env_value MONGO_INITDB_ROOT_USERNAME)" \
+  -e MONGO_ADMIN_PASSWORD="$(env_value MONGO_INITDB_ROOT_PASSWORD)" \
+  "$mongo_id" sh -c 'mongosh --quiet --username "$MONGO_ADMIN_USERNAME" \
+    --password "$MONGO_ADMIN_PASSWORD" --authenticationDatabase admin' \
+  <infra/production/mongo/init-app-user.js >/dev/null
+
+RELEASE_IMAGE_TAG="$tag" docker compose --env-file "$env_file" -p "$project" \
+  -f infra/compose/compose.production.yml up -d --no-deps backend
 
 backend_port=$(env_value BACKEND_HOST_PORT)
 for attempt in $(seq 1 60); do

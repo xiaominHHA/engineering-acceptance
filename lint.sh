@@ -27,9 +27,13 @@ env SMOKE_IMAGE_TAG=lint-smoke SMOKE_BACKEND_HOST_PORT=18082 \
 env BACKEND_HOST_PORT=18081 MYSQL_HOST_PORT=13307 MONGO_HOST_PORT=17018 \
   BACKEND_MEMORY_LIMIT=512m MYSQL_MEMORY_LIMIT=512m MONGO_MEMORY_LIMIT=512m \
   RELEASE_IMAGE_TAG=v0.0.0 \
+  RELEASE_VERSION=0.0.0 GIT_COMMIT=0000000000000000000000000000000000000000 \
+  BUILD_TIME=1970-01-01T00:00:00Z \
+  APP_AUTH_SIGNING_KEY=lint-only-signing-key-at-least-32-bytes \
   MYSQL_DATABASE=acceptance MYSQL_USER=acceptance MYSQL_PASSWORD=lint_password \
   MYSQL_ROOT_PASSWORD=lint_root_password MONGO_DATABASE=acceptance \
   MONGO_INITDB_ROOT_USERNAME=lint_admin MONGO_INITDB_ROOT_PASSWORD=lint_mongo_password \
+  MONGO_APP_USERNAME=lint_app MONGO_APP_PASSWORD=lint_app_password \
   SPRING_PROFILES_ACTIVE=production docker compose -f infra/compose/compose.production.yml config >/dev/null
 scripts/check-file-length.sh
 scripts/check-secrets.sh
