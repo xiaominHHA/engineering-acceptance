@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
@@ -10,10 +9,11 @@ import 'api_exception.dart';
 class ApiClient {
   ApiClient({
     http.Client? client,
-    this.baseUrl = AppConfig.apiBaseUrl,
+    String? baseUrl,
     this.timeout = const Duration(seconds: 15),
   }) : _client = client ?? http.Client(),
-       _ownsClient = client == null;
+       _ownsClient = client == null,
+       baseUrl = baseUrl ?? AppConfig.apiBaseUrl;
 
   final http.Client _client;
   final bool _ownsClient;
@@ -67,8 +67,6 @@ class ApiClient {
       }
       if (response.body.isEmpty) return null;
       return jsonDecode(response.body);
-    } on SocketException {
-      throw const ApiException.network();
     } on http.ClientException {
       throw const ApiException.network();
     } on TimeoutException {

@@ -12,6 +12,7 @@
 
 ## IMPLEMENTED / AUTOMATED TESTED
 
+- Flutter Web 官方 scaffolding、跨平台 ApiClient 和浏览器 current-origin API 解析已实现；release bundle、项目专属 Caddy same-origin gateway 及 Quick Tunnel HTTPS 路由已完成自动/HTTP smoke（尚待人工浏览器 session 验证）。
 - 登录与注册已拆分；登录用户名和社区昵称的用途、输入顺序和 autofill 语义已明确（implemented，Flutter tested）。
 - Forum V1 已实现详情、数组分页/加载更多、pull-to-refresh、幂等点赞、一级回复评论、作者删除评论、统计和帖子级联清理（implemented，Flutter + real MongoDB integration tested；唯一点赞索引由真实 MongoDB 验证）。
 - 帖子/评论作者昵称和当前页统计使用批量读取，未引入逐条 N+1（implemented，integration tested）。

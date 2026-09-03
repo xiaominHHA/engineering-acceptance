@@ -4,6 +4,7 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 ROOT_DIR=$(cd -- "$SCRIPT_DIR" && pwd)
 DIST_DIR="$ROOT_DIR/dist"
 RELEASE_API_BASE_URL=${API_BASE_URL:-http://wm7023.campusmeow.com}
+WEB_API_BASE_URL=${WEB_API_BASE_URL:-}
 ANDROID_BUILD_TYPE=${ANDROID_BUILD_TYPE:-release}
 # Resolved from this script's repository root.
 # shellcheck disable=SC1091
@@ -55,9 +56,20 @@ mkdir -p "$DIST_DIR/frontend" "$DIST_DIR/backend"
   --dart-define="API_BASE_URL=$RELEASE_API_BASE_URL" \
   --dart-define="APP_VERSION=$PROJECT_VERSION" \
   --dart-define="GIT_COMMIT=$GIT_COMMIT")
+web_defines=(
+  --dart-define="APP_VERSION=$PROJECT_VERSION"
+  --dart-define="GIT_COMMIT=$GIT_COMMIT"
+)
+if [[ -n "$WEB_API_BASE_URL" ]]; then
+  web_defines+=(--dart-define="API_BASE_URL=$WEB_API_BASE_URL")
+fi
+(cd "$ROOT_DIR/frontend" && flutter build web --release "${web_defines[@]}")
 (cd "$ROOT_DIR/backend" && ./mvnw -q clean package -DskipTests \
   -Drevision="$PROJECT_VERSION" -Dgit.commit="$GIT_COMMIT")
 cp "$flutter_apk" "$DIST_DIR/frontend/$apk_name"
+web_artifact="$DIST_DIR/frontend/engineering-acceptance-web-$ARTIFACT_VERSION"
+mkdir -p "$web_artifact"
+cp -a "$ROOT_DIR/frontend/build/web/." "$web_artifact/"
 jar_file="$ROOT_DIR/backend/target/engineering-acceptance-backend-$PROJECT_VERSION.jar"
 test -s "$jar_file"
 cp "$jar_file" "$DIST_DIR/backend/$(basename "$jar_file")"
