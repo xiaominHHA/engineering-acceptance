@@ -1,0 +1,17 @@
+:8080 {
+    encode zstd gzip
+
+    handle /api/* {
+        reverse_proxy wm7023-backend:8080
+    }
+
+    handle /actuator/* {
+        reverse_proxy wm7023-backend:8080
+    }
+
+    handle {
+        root * /srv
+        try_files {path} /index.html
+        file_server
+    }
+}

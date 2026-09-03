@@ -21,6 +21,8 @@ if ((${#root_scripts[@]})); then run_shellcheck "${root_scripts[@]}"; fi
 if ((${#helper_scripts[@]})); then run_shellcheck "${helper_scripts[@]}"; fi
 docker compose -f infra/compose/compose.local.yml config >/dev/null
 docker compose -f infra/compose/compose.test.yml config >/dev/null
+WEB_ROOT=/tmp/engineering-acceptance-web-lint \
+  docker compose -f infra/compose/compose.web-preview.yml config >/dev/null
 env SMOKE_IMAGE_TAG=lint-smoke SMOKE_BACKEND_HOST_PORT=18082 \
   docker compose --env-file infra/env/test.env.example \
   -f infra/compose/compose.production-smoke.yml config >/dev/null

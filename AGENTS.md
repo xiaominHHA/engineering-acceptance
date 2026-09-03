@@ -17,7 +17,7 @@
 
 ## 2. 固定技术栈
 
-- Frontend：Flutter / Dart
+- Frontend：Flutter / Dart（Android + Web）
 - Backend：Spring Boot / Java 21 / Maven Wrapper
 - Relational DB：MySQL
 - Document DB：MongoDB
@@ -155,6 +155,7 @@ MongoDB 只负责论坛文档数据，包括帖子、评论和点赞关系。Mon
 只生成：
 
 - `dist/frontend/engineering-acceptance-app-<version>.apk`；
+- `dist/frontend/engineering-acceptance-web-<version>/`；
 - `dist/backend/<artifactId>-<version>.jar`。
 
 不负责 Docker image、部署、Git tag 或 push。

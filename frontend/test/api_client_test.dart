@@ -1,3 +1,4 @@
+import 'package:engineering_acceptance_app/core/config/app_config.dart';
 import 'package:engineering_acceptance_app/core/network/api_client.dart';
 import 'package:engineering_acceptance_app/core/network/api_exception.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -5,6 +6,39 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
+  test('explicit API base URL takes precedence on every platform', () {
+    expect(
+      AppConfig.resolveApiBaseUrl(
+        configuredBaseUrl: 'https://configured.example',
+        isWeb: true,
+        currentBaseUri: Uri.parse('https://runtime.example/app'),
+      ),
+      'https://configured.example',
+    );
+  });
+
+  test('Web defaults to the current browser origin', () {
+    expect(
+      AppConfig.resolveApiBaseUrl(
+        configuredBaseUrl: '',
+        isWeb: true,
+        currentBaseUri: Uri.parse('https://preview.example/forum'),
+      ),
+      'https://preview.example',
+    );
+  });
+
+  test('native development keeps the Android emulator default', () {
+    expect(
+      AppConfig.resolveApiBaseUrl(
+        configuredBaseUrl: '',
+        isWeb: false,
+        currentBaseUri: Uri.parse('file:///application/'),
+      ),
+      'http://10.0.2.2:18080',
+    );
+  });
+
   test('decodes a successful JSON response', () async {
     final client = ApiClient(
       client: MockClient((_) async => http.Response('{"value":"ok"}', 200)),
